@@ -1,0 +1,51 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+
+venv/
+.env/
+.env.*
+
+# Python packaging
+
+build/
+dist/
+*.egg-info/
+
+# Streamlit
+
+.streamlit/
+
+# Logs
+
+*.log
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# IDE
+
+.vscode/
+.idea/
+
+# Data files (optional if large)
+
+data/*.pdf
+
+# FAISS indexes
+
+*.faiss
+*.index
+
+# Model cache
+
+.cache/
+huggingface/
+
