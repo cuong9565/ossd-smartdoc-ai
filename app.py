@@ -1,49 +1,14 @@
+import torch
+torch.classes.__path__ = []
+
 import streamlit as st                                               # tạo web UI
 from langchain_community.document_loaders import PDFPlumberLoader    # đọc nội dung file PDF
 from langchain_text_splitters import RecursiveCharacterTextSplitter  # chia text thành các đoạn nhỏ
-from langchain_community.embeddings import HuggingFaceEmbeddings     # biến text -> vector
+from langchain_huggingface import HuggingFaceEmbeddings              # biến text -> vector
 from langchain_community.vectorstores import FAISS                   # lưu vector và tìm kiếm similarity
-from langchain_community.llms import Ollama                          # gọi LLM chạy local
+from langchain_ollama import OllamaLLM                               # gọi LLM chạy local
 import time
 import tempfile
-
-# Cấu hình mô hình LLM với các tham số tối ưu
-llm = Ollama(
-    model="qwen2.5:7b",
-    temperature=0.7,      # Độ sáng tạo của câu trả lời
-    top_p=0.9,            # Kỹ thuật lấy mẫu nucleus sampling
-    repeat_penalty=1.1,    # Tránh lặp lại từ ngữ
-)
-
-def generate_response(user_input, context):
-    # Logic phát hiện tiếng Việt đơn giản
-    vietnamese_chars = 'ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ'
-    is_vietnamese = any(char in user_input.lower() for char in vietnamese_chars)
-
-    if is_vietnamese:
-        # Prompt tiếng Việt
-        prompt_template = f"""Sử dụng ngữ cảnh sau đây để trả lời câu hỏi. 
-            Nếu bạn không biết, chỉ cần nói là bạn không biết. 
-            Trả lời ngắn gọn (3-4 câu) BẮT BUỘC bằng tiếng Việt.
-
-            Ngữ cảnh: {context}
-
-            Câu hỏi: {user_input}
-
-            Trả lời:"""
-    else:
-        # Prompt tiếng Anh [8]
-        prompt_template = f"""Use the following context to answer the question. 
-            If you don't know the answer, just say you don't know. 
-            Keep answer concise (3-4 sentences).
-
-            Context: {context}
-
-            Question: {user_input}
-
-            Answer:"""
-    
-    return llm.invoke(prompt_template)
 
 # ================= 5.1 THIẾT KẾ UI/UX =================
 st.set_page_config(
@@ -137,7 +102,7 @@ with st.sidebar:
     
     st.header(":material/settings: Thông tin hệ thống")
     st.info("Định dạng: Chỉ PDF")
-    st.info("Kích thước tối đa: 10MB")
+    st.info("Kích thước tối đa: 50MB")
     st.info("Ngôn ngữ hỗ trợ: Tiếng Việt, English")
 
     st.divider()
@@ -162,54 +127,69 @@ st.write("Hệ thống hỏi đáp thông minh dựa trên tài liệu PDF nội
 
 # File Upload
 st.header(":material/upload_file: Upload file PDF")
-uploaded_file = st.file_uploader("Chọn file PDF (Drag-and-drop)", type=["pdf"])
+uploaded_file = st.file_uploader("Chọn file PDF (Kéo-Thả hoặc Tìm file)", type=["pdf"])
 
 # ================= 3.2.1 DOCUMENT PROCESSING FLOW =================
 if "retriever" not in st.session_state:
     st.session_state.retriever = None
 
 if uploaded_file and st.session_state.retriever is None: 
-    if uploaded_file.size > 10 * 1024 * 1024: 
-        st.error(":material/error: Lỗi: File vượt quá giới hạn 10MB!") # [10]
+    if uploaded_file.size > 50 * 1024 * 1024: 
+        st.error(":material/error: Lỗi: File vượt quá giới hạn 50MB!") # [10]
     else:
         # Lưu file tạm để xử lý
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(uploaded_file.getbuffer())
             temp_path = tmp.name
 
-        # Sử dụng st.status để hiển thị tiến trình xử lý [11]
+        # Sử dụng st.status để hiển thị tiến trình xử lý
         with st.status("Đang phân tích tài liệu...", expanded=True) as status:
-            # 1. Loading PDF [4]
-            st.write("Đang trích xuất văn bản...")
+            # ========== Loading PDF ==========
+            start_time = time.time()
+            loading_text = st.empty()
+            loading_text.write("Đang trích xuất văn bản...")
+            # Xử lý
             loader = PDFPlumberLoader(temp_path)
             docs = loader.load()
+            # Ghi kết quả
+            end_time = time.time()
+            loading_text.success(f"Đã trích xuất văn bản xong trong {round(end_time - start_time, 2)} giây")            
             
-            # 2. Splitting [5]
-            st.write("Đang chia nhỏ văn bản (Chunking)...")
+            # ========== Chunking ==========
+            start_time = time.time()
+            chunking_text = st.empty()
+            chunking_text.write("Đang chia nhỏ văn bản...")
+            # Xử lý
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000, 
-                chunk_overlap=100
+                chunk_size=500,
+                chunk_overlap=50
             )
             documents = text_splitter.split_documents(docs)
+            # Ghi kết quả
+            end_time = time.time()
+            chunking_text.success(f"Đã chia nhỏ thành {len(documents)} chunk trong {round(end_time - start_time, 2)} giây")
             
-            # 3. Embedding [6, 12]
-            st.write("Đang tạo vector embedding...")
+            # ========== Embedding ==========
+            start_time = time.time()
+            embedding_text = st.empty()
+            embedding_text.write("Đang tạo vector embedding...")
+            # Xử lý
             embedder = HuggingFaceEmbeddings(
                 model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                 model_kwargs={'device': 'cpu'},
                 encode_kwargs={'normalize_embeddings': True}
             )
-            
-            # 4. Indexing với FAISS [6, 7]
             vector_db = FAISS.from_documents(documents, embedder)
             st.session_state.retriever = vector_db.as_retriever(
                 search_type="similarity",
                 search_kwargs={"k": 3}
             )
+            # Ghi kết quả
+            end_time = time.time()
+            embedding_text.success(f"Đã tạo vector embedding trong {round(end_time - start_time, 2)} giây")
+            
             status.update(label="PDF đã được xử lý thành công!", state="complete", expanded=False)
         st.success(":material/check_circle: Tài liệu đã sẵn sàng để hỏi đáp!")
-
-st.divider()
 
 # 5.3.2 Question Answering
 st.header(":material/quiz: Đặt câu hỏi")
@@ -227,9 +207,44 @@ if st.button(":material/send: Gửi câu hỏi"):
             if "retriever" not in st.session_state or st.session_state.retriever is None:
                 st.warning("Chưa có dữ liệu để tìm kiếm.")
             else:
+                start_time = time.time()
+                # Cấu hình mô hình LLM với các tham số tối ưu
+                llm = OllamaLLM(
+                    model="qwen2.5:7b",
+                    temperature=0.7,      # Độ sáng tạo của câu trả lời
+                    top_p=0.9,            # Kỹ thuật lấy mẫu nucleus sampling
+                    repeat_penalty=1.1,   # Tránh lặp lại từ ngữ
+                )
                 relevant_docs = st.session_state.retriever.invoke(question)
                 context = "\n".join([doc.page_content for doc in relevant_docs])
                 
+                # Logic phát hiện tiếng Việt đơn giản
+                vietnamese_chars = 'aaaaeeeiooouuuuyyyyd'
+                is_vietnamese = any(char in question.lower() for char in vietnamese_chars)
+
+                if is_vietnamese:
+                    # Prompt tiếng Việt
+                    prompt_template = f"""
+Sử dụng ngữ cảnh sau đây để trả lời câu hỏi. 
+Nếu bạn không biết, chỉ cần nói là bạn không biết. 
+Trả lời ngắn gọn (3-4 câu) BẮT BUỘC bằng tiếng Việt.
+Ngữ cảnh: {context}
+Câu hỏi: {question}
+Trả lời:
+                    """
+                else:
+                    # Prompt tiếng Anh
+                    prompt_template = f"""
+Use the following context to answer the question. 
+If you don't know the answer, just say you don't know. 
+Keep answer concise (3-4 sentences).
+Context: {context}
+Question: {question}
+Answer:
+                    """
+                
+                response = llm.invoke(prompt_template)
                 # Sinh câu trả lời
-                response = generate_response(question, context)
+                end_time = time.time()
+                st.markdown(f"**Thời gian phản hồi:** {round(end_time - start_time, 2)} giây")
                 st.markdown(f"**Trả lời:**\n{response}")

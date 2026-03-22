@@ -1,28 +1,25 @@
 streamlit==1.41.1
 
 # LangChain ecosystem
-
 langchain==0.3.16
 langchain-community==0.3.16
 langchain-text-splitters==0.3.5
+langchain-ollama==0.2.2
+langchain-huggingface==0.1.2
 
 # Embedding & LLM
-
 sentence-transformers
 transformers
 torch
 
 # Vector store
-
 faiss-cpu==1.9.0
 
 # Document processing
-
 pdfplumber
 pypdf
 
 # Data processing
-
 numpy
 pandas
 
