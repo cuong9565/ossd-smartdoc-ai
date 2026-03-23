@@ -7,8 +7,25 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter  # chia text
 from langchain_huggingface import HuggingFaceEmbeddings              # biến text -> vector
 from langchain_community.vectorstores import FAISS                   # lưu vector và tìm kiếm similarity
 from langchain_ollama import OllamaLLM                               # gọi LLM chạy local
+from langchain.memory import ConversationBufferWindowMemory          # Lưu lịch sử hội thoại để gen context
 import time
+import datetime
 import tempfile
+
+# Khởi tạo "memory" vào session để lưu k tin nhắn gần nhất promt cho AI
+if "memory_window" not in st.session_state:
+    st.session_state.memory_window = ConversationBufferWindowMemory(
+        memory_key="chat_history",
+        return_messages=True,
+        k=3                                                     # Số cuộc hội thoại gần nhất
+    )
+
+# Khởi tạo lịch sử 
+if "chat_history_ui" not in st.session_state:
+    st.session_state.chat_history_ui = []
+
+if "retriever" not in st.session_state:
+    st.session_state.retriever = None
 
 # ================= 5.1 THIẾT KẾ UI/UX =================
 st.set_page_config(
@@ -129,10 +146,32 @@ st.write("Hệ thống hỏi đáp thông minh dựa trên tài liệu PDF nội
 st.header(":material/upload_file: Upload file PDF")
 uploaded_file = st.file_uploader("Chọn file PDF (Kéo-Thả hoặc Tìm file)", type=["pdf"])
 
-# ================= 3.2.1 DOCUMENT PROCESSING FLOW =================
-if "retriever" not in st.session_state:
-    st.session_state.retriever = None
+# Cấu hình Chungking
+st.subheader(":material/settings: Cấu hình Chunking")
 
+col1, col2 = st.columns(2)
+
+with col1:
+    chunk_size = st.number_input(
+        "Chunk size",
+        min_value=100,
+        max_value=2000,
+        value=500,
+        step=50,
+        help="Kích thước mỗi đoạn văn bản"
+    )
+
+with col2:
+    chunk_overlap = st.number_input(
+        "Chunk overlap",
+        min_value=0,
+        max_value=500,
+        value=50,
+        step=10,
+        help="Số ký tự overlap giữa các chunk"
+    )
+
+# ================= 3.2.1 DOCUMENT PROCESSING FLOW =================
 if uploaded_file and st.session_state.retriever is None: 
     if uploaded_file.size > 50 * 1024 * 1024: 
         st.error(":material/error: Lỗi: File vượt quá giới hạn 50MB!") # [10]
@@ -161,8 +200,8 @@ if uploaded_file and st.session_state.retriever is None:
             chunking_text.write("Đang chia nhỏ văn bản...")
             # Xử lý
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=50
+                chunk_size=int(chunk_size),
+                chunk_overlap=int(chunk_overlap)
             )
             documents = text_splitter.split_documents(docs)
             # Ghi kết quả
@@ -191,6 +230,21 @@ if uploaded_file and st.session_state.retriever is None:
             status.update(label="PDF đã được xử lý thành công!", state="complete", expanded=False)
         st.success(":material/check_circle: Tài liệu đã sẵn sàng để hỏi đáp!")
 
+
+# #####################
+# UI lịch sử hội thoại
+# #####################
+st.header(":material/history: Lịch sử hội thoại")
+for msg in st.session_state.chat_history_ui:
+    if msg["role"] == "user":
+        with st.chat_message("user"):
+            st.write(msg["content"])
+            st.caption(f"Thời điểm: {msg['timestamp']}")
+    else:
+        with st.chat_message("assistant"):
+            st.write(msg["content"])
+            st.caption(f"Thời điểm: {msg['timestamp']} | Thời gian phản hồi: {msg['response_time']} giây")
+
 # 5.3.2 Question Answering
 st.header(":material/quiz: Đặt câu hỏi")
 question = st.text_input("Nhập câu hỏi của bạn tại đây:", placeholder="Tìm kiếm thông tin trong tài liệu...")
@@ -207,6 +261,14 @@ if st.button(":material/send: Gửi câu hỏi"):
             if "retriever" not in st.session_state or st.session_state.retriever is None:
                 st.warning("Chưa có dữ liệu để tìm kiếm.")
             else:
+                #  Lưu trò chuyện của người dùng
+                st.session_state.chat_history_ui.append({
+                    "role": "user",
+                    "content": question,
+                    "timestamp": datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+                    "response_time": None  # user thì không cần response_time
+                })
+
                 start_time = time.time()
                 # Cấu hình mô hình LLM với các tham số tối ưu
                 llm = OllamaLLM(
@@ -218,6 +280,13 @@ if st.button(":material/send: Gửi câu hỏi"):
                 relevant_docs = st.session_state.retriever.invoke(question)
                 context = "\n".join([doc.page_content for doc in relevant_docs])
                 
+                # Lấy lịch sử hội thoại
+                chat_history = st.session_state.memory_window.load_memory_variables({})["chat_history"]
+                history_text = "\n".join([
+                    f"User: {m.content}" if m.type == "human" else f"AI: {m.content}"
+                    for m in chat_history
+                ])
+                
                 # Logic phát hiện tiếng Việt đơn giản
                 vietnamese_chars = 'aaaaeeeiooouuuuyyyyd'
                 is_vietnamese = any(char in question.lower() for char in vietnamese_chars)
@@ -225,26 +294,67 @@ if st.button(":material/send: Gửi câu hỏi"):
                 if is_vietnamese:
                     # Prompt tiếng Việt
                     prompt_template = f"""
-Sử dụng ngữ cảnh sau đây để trả lời câu hỏi. 
-Nếu bạn không biết, chỉ cần nói là bạn không biết. 
-Trả lời ngắn gọn (3-4 câu) BẮT BUỘC bằng tiếng Việt.
-Ngữ cảnh: {context}
-Câu hỏi: {question}
+Bạn là một AI trợ lý thông minh, chuyên trả lời câu hỏi dựa trên tài liệu.
+
+Nhiệm vụ:
+- Chỉ sử dụng thông tin từ "Ngữ cảnh" để trả lời
+- Kết hợp với "Lịch sử hội thoại" để hiểu câu hỏi (đặc biệt là câu hỏi tiếp theo)
+- Nếu không tìm thấy câu trả lời trong ngữ cảnh, hãy nói: "Tôi không biết"
+
+Lịch sử hội thoại:
+{history_text}
+
+Ngữ cảnh:
+{context}
+
+Câu hỏi:
+{question}
+
 Trả lời:
-                    """
+- Rõ ràng
+- Không bịa thông tin
+- Trả lời bằng tiếng Việt
+                    """                
                 else:
                     # Prompt tiếng Anh
                     prompt_template = f"""
-Use the following context to answer the question. 
-If you don't know the answer, just say you don't know. 
-Keep answer concise (3-4 sentences).
-Context: {context}
-Question: {question}
+You are an intelligent AI assistant that answers questions based on provided documents.
+
+Instructions:
+- Use ONLY the information from the "Context"
+- Use "Chat History" to understand follow-up questions
+- If the answer is not in the context, say: "I don't know"
+
+Chat History:
+{history_text}
+
+Context:
+{context}
+
+Question:
+{question}
+
 Answer:
+- Be concise
+- Do not hallucinate
                     """
                 
                 response = llm.invoke(prompt_template)
-                # Sinh câu trả lời
                 end_time = time.time()
-                st.markdown(f"**Thời gian phản hồi:** {round(end_time - start_time, 2)} giây")
+                elapsed_time = round(end_time - start_time, 2)
+                # Lưu vào lịch sử hội thoại
+                st.session_state.memory_window.save_context(
+                    {"input": question},
+                    {"output": response}
+                )
+                # Lưu lịch sử phản hồi của robot
+                st.session_state.chat_history_ui.append({
+                    "role": "ai",
+                    "content": response,
+                    "timestamp": datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+                    "response_time": elapsed_time
+                })
+                # Sinh câu trả lời
+                st.markdown(f"**Thời gian phản hồi:** {elapsed_time} giây")
+                st.markdown(f"**Câu hỏi:** {question}")
                 st.markdown(f"**Trả lời:**\n{response}")
