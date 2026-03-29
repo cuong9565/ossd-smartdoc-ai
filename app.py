@@ -7,20 +7,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter  # chia text
 from langchain_huggingface import HuggingFaceEmbeddings              # biến text -> vector
 from langchain_community.vectorstores import FAISS                   # lưu vector và tìm kiếm similarity
 from langchain_ollama import OllamaLLM                               # gọi LLM chạy local
-from langchain.memory import ConversationBufferWindowMemory          # Lưu lịch sử hội thoại để gen context
 import time
 import datetime
 import tempfile
 
-# Khởi tạo "memory" vào session để lưu k tin nhắn gần nhất promt cho AI
-if "memory_window" not in st.session_state:
-    st.session_state.memory_window = ConversationBufferWindowMemory(
-        memory_key="chat_history",
-        return_messages=True,
-        k=3                                                     # Số cuộc hội thoại gần nhất
-    )
+st.set_page_config(
+    page_title="SmartDoc AI",
+    page_icon=":material/description:",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Khởi tạo lịch sử 
+# Khởi tạo lịch sử hội thoại trong session state
 if "chat_history_ui" not in st.session_state:
     st.session_state.chat_history_ui = []
 
@@ -28,12 +26,6 @@ if "retriever" not in st.session_state:
     st.session_state.retriever = None
 
 # ================= 5.1 THIẾT KẾ UI/UX =================
-st.set_page_config(
-    page_title="SmartDoc AI",
-    page_icon=":material/description:",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # ================= 5.1.1 COLOR PALETTE & CUSTOM CSS =================
 st.markdown("""
@@ -102,6 +94,25 @@ st.markdown("""
         border-left: 5px solid #007BFF;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         color: #212529;
+    }
+
+    /* Multiline input styling */
+    .stTextArea textarea {
+        min-height: 140px;
+        border-radius: 12px;
+        padding: 14px;
+        border: 1px solid #dfe3e8;
+        background-color: #ffffff;
+        color: #212529;
+    }
+
+    .stTextArea {
+        margin-bottom: 1rem;
+    }
+
+    .stButton>button:focus {
+        outline: 2px solid #0056b3;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -247,10 +258,16 @@ for msg in st.session_state.chat_history_ui:
 
 # 5.3.2 Question Answering
 st.header(":material/quiz: Đặt câu hỏi")
-question = st.text_input("Nhập câu hỏi của bạn tại đây:", placeholder="Tìm kiếm thông tin trong tài liệu...")
+with st.form(key="question_form"):
+    question = st.text_area(
+        "Nhập câu hỏi của bạn tại đây:",
+        placeholder="Tìm kiếm thông tin trong tài liệu...",
+        height=140,
+    )
+    submit_question = st.form_submit_button(":material/send: Gửi câu hỏi")
 
 # Nút bấm Primary Color (#007BFF)
-if st.button(":material/send: Gửi câu hỏi"):
+if submit_question:
     if not uploaded_file:
         st.warning(":material/warning: Vui lòng tải lên tài liệu trước.")
     elif not question.strip():
@@ -280,10 +297,10 @@ if st.button(":material/send: Gửi câu hỏi"):
                 relevant_docs = st.session_state.retriever.invoke(question)
                 context = "\n".join([doc.page_content for doc in relevant_docs])
                 
-                # Lấy lịch sử hội thoại
-                chat_history = st.session_state.memory_window.load_memory_variables({})["chat_history"]
+                # Lấy lịch sử hội thoại từ session state
+                chat_history = st.session_state.chat_history_ui[-6:]
                 history_text = "\n".join([
-                    f"User: {m.content}" if m.type == "human" else f"AI: {m.content}"
+                    f"User: {m['content']}" if m["role"] == "user" else f"AI: {m['content']}"
                     for m in chat_history
                 ])
                 
@@ -342,11 +359,6 @@ Answer:
                 response = llm.invoke(prompt_template)
                 end_time = time.time()
                 elapsed_time = round(end_time - start_time, 2)
-                # Lưu vào lịch sử hội thoại
-                st.session_state.memory_window.save_context(
-                    {"input": question},
-                    {"output": response}
-                )
                 # Lưu lịch sử phản hồi của robot
                 st.session_state.chat_history_ui.append({
                     "role": "ai",
