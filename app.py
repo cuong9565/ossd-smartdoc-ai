@@ -2,7 +2,7 @@ import torch
 torch.classes.__path__ = []
 
 import streamlit as st                                               # tạo web UI
-from langchain_community.document_loaders import PDFPlumberLoader    # đọc nội dung file PDF
+from langchain_community.document_loaders import PDFPlumberLoader, Docx2txtLoader    # đọc nội dung file PDF
 from langchain_text_splitters import RecursiveCharacterTextSplitter  # chia text thành các đoạn nhỏ
 from langchain_huggingface import HuggingFaceEmbeddings              # biến text -> vector
 from langchain_community.vectorstores import FAISS                   # lưu vector và tìm kiếm similarity
@@ -10,6 +10,40 @@ from langchain_ollama import OllamaLLM                               # gọi LLM
 import time
 import datetime
 import tempfile
+import sqlite3
+
+conn = sqlite3.connect('message.db')
+c = conn.cursor()
+# print(c)
+
+# c.execute("""SELECT * FROM MESSAGE""")
+# print('Print data')
+# output = c.fetchall()
+# for row in output:
+#     print(row)
+
+# c.execute("""DROP TABLE IF EXISTS MESSAGE""")
+
+# table_query = """CREATE TABLE MESSAGE(
+#                 ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+#                 ID_Conversation INTEGER NOT NULL,
+#                 Name TEXT NOT NULL,
+#                 Content TEXT NOT NULL,
+#                 Type_User TEXT CHECK(Type_User in ('user', 'ai')),
+#                 Response INTEGER,
+#                 Time_Create TIMESTAMP)"""
+
+# c.execute(table_query)
+
+insert = """INSERT INTO MESSAGE (ID_Conversation, Name, Content, Type_User, Response, Time_Create) values (?, ?, ?, ?, ?, ?)"""
+
+msgs = """SELECT Content, Type_User, Response, Time_Create FROM MESSAGE WHERE ID_Conversation = ?"""
+
+c.execute("""SELECT COUNT (DISTINCT ID_Conversation) FROM MESSAGE;""")
+st.session_state.cnt = c.fetchone()[0]
+conn.commit()
+# print(st.session_state.cnt)
+
 
 st.set_page_config(
     page_title="SmartDoc AI",
@@ -24,6 +58,9 @@ if "chat_history_ui" not in st.session_state:
 
 if "retriever" not in st.session_state:
     st.session_state.retriever = None
+
+if "check" not in st.session_state:
+    st.session_state.check = False
 
 # ================= 5.1 THIẾT KẾ UI/UX =================
 
@@ -118,9 +155,45 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ================= 5.1.2 SIDEBAR (Bên trái) =================
+@st.dialog("Message")
+def show_message(id):
+    # print(id)
+    c.execute(msgs, (id, ))
+    res = c.fetchall()
+    for row in res:
+        if row[1] == "user":
+            with st.chat_message("user"):
+                st.write(row[0])
+                st.caption(f"Thời điểm: {row[3]}")
+        else:
+            with st.chat_message("assistant"):
+                st.write(row[0])
+                st.caption(f"Thời điểm: {row[3]} | Thời gian phản hồi: {row[2]} giây")
+
+@st.dialog("Warning")
+def clear_message():
+    st.write("Are you want to clear history?")
+    col1, col2 = st.columns(2)
+    if col1.button("OK"):
+        c.execute("""DELETE FROM MESSAGE""")
+        conn.commit()
+        st.rerun()
+    if col2.button("Cancel"):
+        st.rerun()
+
+@st.dialog("Warning")
+def clear_vector_store():
+    st.write("Are you want to clear history?")
+    col1, col2 = st.columns(2)
+    if col1.button("OK"):
+        vector_db.delete(documents)
+        st.rerun()
+    if col2.button("Cancel"):
+        st.rerun()
+
 with st.sidebar:
     st.header(":material/help_outline: Hướng dẫn sử dụng")
-    st.write("1. Tải lên file PDF bằng cách kéo thả hoặc click vào khu vực upload.")
+    st.write("1. Tải lên file PDF hoặc DOCX bằng cách kéo thả hoặc click vào khu vực upload.")
     st.write("2. Đợi hệ thống xử lý và phân tích tài liệu.")
     st.write("3. Nhập câu hỏi vào ô tìm kiếm.")
     st.write("4. Xem câu trả lời được sinh ra bởi AI.")
@@ -129,7 +202,7 @@ with st.sidebar:
     st.divider()
     
     st.header(":material/settings: Thông tin hệ thống")
-    st.info("Định dạng: Chỉ PDF")
+    st.info("Định dạng: PDF hoặc DOCX")
     st.info("Kích thước tối đa: 50MB")
     st.info("Ngôn ngữ hỗ trợ: Tiếng Việt, English")
 
@@ -139,7 +212,20 @@ with st.sidebar:
     st.info("LLM Model: **qwen2.5:7b (Ollama)**")
     st.info("Version: **1.0**")
     st.info("Embedding: **paraphrase-multilingual-mpnet-base-v2**")
+
+    st.divider()
+    st.header("History")
+    c.execute("""SELECT ID_Conversation, NAME FROM MESSAGE GROUP BY ID_Conversation ORDER BY ID_Conversation DESC""")
+    res = c.fetchall()
+    for tmp in res:
+        st.button(tmp[1], tmp[0], on_click=show_message, args=[tmp[0]])
     
+    st.divider()
+    st.header("Clearing site")
+    col1, col2 = st.columns(2)
+    col1.button("Clear history", on_click=clear_message)
+    col2.button("Clear vector store")
+
     st.divider()
     st.markdown(
     """
@@ -151,11 +237,11 @@ with st.sidebar:
 # ================= MAIN AREA (Chính giữa) =================
 # Title và Header
 st.title(":material/rocket_launch: SmartDoc AI - RAG System")
-st.write("Hệ thống hỏi đáp thông minh dựa trên tài liệu PDF nội bộ.")
+st.write("Hệ thống hỏi đáp thông minh dựa trên tài liệu PDF hoặc DOCX nội bộ.")
 
 # File Upload
-st.header(":material/upload_file: Upload file PDF")
-uploaded_file = st.file_uploader("Chọn file PDF (Kéo-Thả hoặc Tìm file)", type=["pdf"])
+st.header(":material/upload_file: Upload file PDF hoặc DOCX")
+uploaded_file = st.file_uploader("Chọn file PDF hoặc DOCX (Kéo-Thả hoặc Tìm file)", type=["pdf", "docx"])
 
 # Cấu hình Chungking
 st.subheader(":material/settings: Cấu hình Chunking")
@@ -192,15 +278,27 @@ if uploaded_file and st.session_state.retriever is None:
             tmp.write(uploaded_file.getbuffer())
             temp_path = tmp.name
 
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+            tmp.write(uploaded_file.getbuffer())
+            temp_path = tmp.name
+
         # Sử dụng st.status để hiển thị tiến trình xử lý
         with st.status("Đang phân tích tài liệu...", expanded=True) as status:
-            # ========== Loading PDF ==========
+            # ========== Loading PDF or DOCX ==========
             start_time = time.time()
             loading_text = st.empty()
             loading_text.write("Đang trích xuất văn bản...")
             # Xử lý
-            loader = PDFPlumberLoader(temp_path)
-            docs = loader.load()
+            with open(temp_path, 'rb') as file:
+                header = file.read(4)
+                if(header == b'%PDF'):
+                    loader = PDFPlumberLoader(temp_path)
+                    docs = loader.load()
+                else:
+                    loader = Docx2txtLoader(temp_path)
+                    docs = loader.load()
+                    # print(docs[0])
+
             # Ghi kết quả
             end_time = time.time()
             loading_text.success(f"Đã trích xuất văn bản xong trong {round(end_time - start_time, 2)} giây")            
@@ -230,6 +328,7 @@ if uploaded_file and st.session_state.retriever is None:
                 encode_kwargs={'normalize_embeddings': True}
             )
             vector_db = FAISS.from_documents(documents, embedder)
+            print(vector_db)
             st.session_state.retriever = vector_db.as_retriever(
                 search_type="similarity",
                 search_kwargs={"k": 3}
@@ -285,11 +384,18 @@ if submit_question:
                     "timestamp": datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
                     "response_time": None  # user thì không cần response_time
                 })
+                # print(st.session_state.check)
+                if st.session_state.check == False:
+                    st.session_state.cnt = st.session_state.cnt + 1
+                    st.session_state.check = True
+                c.execute(insert, (st.session_state.cnt, st.session_state.chat_history_ui[0]['content'], question, 'user', None, datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")))
+                conn.commit()
+                # st.rerun()
 
                 start_time = time.time()
                 # Cấu hình mô hình LLM với các tham số tối ưu
                 llm = OllamaLLM(
-                    model="qwen2.5:7b",
+                    model="qwen2.5:1.5b",
                     temperature=0.7,      # Độ sáng tạo của câu trả lời
                     top_p=0.9,            # Kỹ thuật lấy mẫu nucleus sampling
                     repeat_penalty=1.1,   # Tránh lặp lại từ ngữ
@@ -366,7 +472,20 @@ Answer:
                     "timestamp": datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
                     "response_time": elapsed_time
                 })
+                c.execute(insert, (st.session_state.cnt, st.session_state.chat_history_ui[0]['content'], response, 'ai', elapsed_time, datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")))
+                conn.commit()
                 # Sinh câu trả lời
                 st.markdown(f"**Thời gian phản hồi:** {elapsed_time} giây")
                 st.markdown(f"**Câu hỏi:** {question}")
                 st.markdown(f"**Trả lời:**\n{response}")
+                st.rerun()
+
+# c.execute("""SELECT * FROM MESSAGE""")
+# print('Print data')
+# output = c.fetchall()
+# for row in output:
+#     print(row)
+
+# conn.commit()
+
+# c.close()
