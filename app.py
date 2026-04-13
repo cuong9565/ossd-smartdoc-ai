@@ -12,6 +12,8 @@ import datetime
 import tempfile
 import sqlite3
 
+vector_db = None
+
 conn = sqlite3.connect('message.db')
 c = conn.cursor()
 # print(c)
@@ -183,10 +185,16 @@ def clear_message():
 
 @st.dialog("Warning")
 def clear_vector_store():
-    st.write("Are you want to clear history?")
+    st.write("Are you want to clear vector store?")
     col1, col2 = st.columns(2)
     if col1.button("OK"):
-        vector_db.delete(documents)
+        if vector_db != None:
+            ids = []
+            for i, j in vector_db.docstore._dict.items():
+                ids.append(i)
+            vector_db.docstore.delete(ids)
+            vector_db.index_to_docstore_id.clear()
+        else: st.session_state.retriever = None
         st.rerun()
     if col2.button("Cancel"):
         st.rerun()
@@ -224,7 +232,7 @@ with st.sidebar:
     st.header("Clearing site")
     col1, col2 = st.columns(2)
     col1.button("Clear history", on_click=clear_message)
-    col2.button("Clear vector store")
+    col2.button("Clear vector store", on_click=clear_vector_store)
 
     st.divider()
     st.markdown(
@@ -328,7 +336,9 @@ if uploaded_file and st.session_state.retriever is None:
                 encode_kwargs={'normalize_embeddings': True}
             )
             vector_db = FAISS.from_documents(documents, embedder)
-            print(vector_db)
+            # print(vector_db.index_to_docstore_id.items())
+            # print(vector_db.index.remove_ids())
+            # print(vector_db.docstore._dict.items())
             st.session_state.retriever = vector_db.as_retriever(
                 search_type="similarity",
                 search_kwargs={"k": 3}
@@ -479,13 +489,3 @@ Answer:
                 st.markdown(f"**Câu hỏi:** {question}")
                 st.markdown(f"**Trả lời:**\n{response}")
                 st.rerun()
-
-# c.execute("""SELECT * FROM MESSAGE""")
-# print('Print data')
-# output = c.fetchall()
-# for row in output:
-#     print(row)
-
-# conn.commit()
-
-# c.close()
