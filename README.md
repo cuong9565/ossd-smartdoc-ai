@@ -131,3 +131,68 @@ pip install -r requirements.txt
 - Hỗ trợ nhiều file
 
 ---
+
+## Cấu trúc thư mục
+
+```bash
+smartdoc_ai/
+│
+├── app.py                        # Entry point (Streamlit UI chính)
+│
+├── src/                          # chứa toàn bộ logic chính
+│   │
+│   ├── core/                     # Logic chính (RAG pipeline)
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── embeddings.py
+│   │   ├── llm.py
+│   │   ├── retriever.py
+│   │   ├── rag_pipeline.py
+│   │
+│   ├── loaders/                  # Load document
+│   │   ├── __init__.py
+│   │   ├── pdf_loader.py
+│   │   ├── docx_loader.py
+│   │   ├── loader_factory.py
+│   │
+│   ├── processing/               # Text processing
+│   │   ├── __init__.py
+│   │   ├── chunking.py
+│   │   ├── metadata.py
+│   │
+│   ├── vectorstore/              # DB
+│   │   ├── __init__.py
+│   │   ├── faiss_store.py
+│   │   ├── hybrid_store.py
+│   │
+│   ├── memory/                   # Conversational memory
+│   │   ├── __init__.py
+│   │   ├── chat_memory.py
+│   │
+│   ├── reranker/
+│   │   ├── __init__.py
+│   │   ├── cross_encoder.py
+│   │
+│   ├── advanced/
+│   │   ├── __init__.py
+│   │   ├── self_rag.py
+│   │   ├── query_rewriter.py
+│   │
+│   ├── ui/                       # UI components
+│   │   ├── __init__.py
+│   │   ├── sidebar.py
+│   │   ├── chat.py
+│   │   ├── uploader.py
+│   │   ├── styles.py
+│   │   ├── sources.py
+│   │
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── text_utils.py
+│   │   ├── time_utils.py
+│   │
+│   └── experiments/
+│       ├── chunk_experiment.py
+│
+└── requirements.txt
+```
