@@ -17,7 +17,7 @@ def render_chat_section():
         st.markdown("""
         <div style="text-align: center; padding: 2rem; background-color: #F0F7FF; border-radius: 12px; margin: 1rem 0;">
             <p style="font-size: 1.1rem; color: #0C5460; margin: 0 0 0.5rem 0; font-weight: 600;">📤 Tải lên tài liệu để bắt đầu</p>
-            <p style="color: #0C5460; margin: 0; font-size: 0.95rem;">Sử dụng mục "Upload File PDF" phía trên</p>
+            <p style="color: #0C5460; margin: 0; font-size: 0.95rem;">Sử dụng mục "Tải file pdf hoặc word" phía trên</p>
         </div>
         """, unsafe_allow_html=True)
 

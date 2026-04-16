@@ -1,7 +1,8 @@
 import streamlit as st
 import tempfile
 import os
-from ..core import load_pdf, chunk_pdf, embedding
+from ..core import chunk_file, embedding
+from ..advanced import load_file
 
 def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k):
     if uploaded_file and st.session_state.retriever is None:
@@ -12,8 +13,11 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k):
             st.error(f"❌ File quá lớn ({file_size_mb:.2f}MB > 50MB)")
             return
         
+        # Check if suffix uploaded_file is pdf or word
+        suffix = ".pdf" if uploaded_file.type == "application/pdf" else ".docx"
+        
         # Save temporary file to memory
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(uploaded_file.getbuffer())
             temp_path = tmp.name
         
@@ -23,16 +27,16 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k):
         # Processing with status
         with st.status("🔄 Đang phân tích tài liệu...", expanded=True) as status:
             try:
-                # Load PDF
+                # Load file
                 step1 = st.empty()
-                step1.write("📖 Bước 1/3: Trích xuất văn bản từ PDF...")
-                elapsed, docs = load_pdf(temp_path)
+                step1.write("📖 Bước 1/3: Trích xuất văn bản...")
+                elapsed, docs = load_file(temp_path, suffix)
                 step1.success(f"✓ Trích xuất xong: {len(docs)} trang trong {elapsed}s")
                 
                 # Chunking pdf
                 step2 = st.empty()
                 step2.write("✂️ Bước 2/3: Chia nhỏ văn bản thành chunks...")
-                elapsed, documents = chunk_pdf(chunk_size, chunk_overlap, docs)
+                elapsed, documents = chunk_file(chunk_size, chunk_overlap, docs)
                 step2.success(f"✓ Chunking xong: {len(documents)} chunks trong {elapsed}s")
                 
                 # Embedding
