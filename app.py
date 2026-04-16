@@ -1,7 +1,8 @@
 import torch
 torch.classes.__path__ = []
 
-from src.ui import load_css, render_sidebar, render_page, render_header, init_sessions_state, render_upload_ui, render_document_status_ui, document_processing, render_chat_section
+from src.core import init_sessions_state
+from src.ui import load_css, render_sidebar, render_page, render_header, render_upload_ui, render_document_status_ui, document_processing, render_chat_section
 from src.advanced import render_chunk_config
 
 def main():

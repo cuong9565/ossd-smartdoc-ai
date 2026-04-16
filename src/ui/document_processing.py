@@ -33,18 +33,12 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k):
                 step2 = st.empty()
                 step2.write("✂️ Bước 2/3: Chia nhỏ văn bản thành chunks...")
                 elapsed, documents = chunk_pdf(chunk_size, chunk_overlap, docs)
-                st.session_state.document_chunks = len(documents) # Save chunks to session
                 step2.success(f"✓ Chunking xong: {len(documents)} chunks trong {elapsed}s")
                 
                 # Embedding
                 step3 = st.empty()
                 step3.write("🔢 Bước 3/3: Tạo vector embeddings...")
-                elapsed, vector_db = embedding(documents)
-                st.session_state.vector_db = vector_db                 # Save vector database to session
-                st.session_state.retriever = vector_db.as_retriever(   # Save retriever to session
-                    search_type="similarity",
-                    search_kwargs={"k": int(retrieval_k)}
-                )
+                elapsed = embedding(documents, retrieval_k)
                 step3.success(f"✓ Embedding xong trong {elapsed}s")
 
                 # Update ui success

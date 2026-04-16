@@ -1,6 +1,14 @@
 import streamlit as st
 
 def init_sessions_state():
+    # Lưu danh sách cuộc hội thoại
+    # Mỗi một chat_history_ui có cấu trúc sau
+        # "role": "user" || "",
+        # "content": "CÂU HỎI CỦA BẠN" || "PHẢN HỒI CỦA AI",
+        # "timestamp": Thời điểm phản hồi,
+        # "response_time": Thời gian phản hồi || None
+        # "sources": Danh sách nội dung liên quan || None
+        # "keywords": Danh sách keywords liên quan || None
     if "chat_history_ui" not in st.session_state:
         st.session_state.chat_history_ui = []
 
