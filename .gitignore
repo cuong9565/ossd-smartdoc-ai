@@ -50,3 +50,4 @@ data/*.pdf
 .cache/
 huggingface/
 
+__pycache__
