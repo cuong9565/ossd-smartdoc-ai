@@ -2,10 +2,11 @@ import streamlit as st
 import os
 
 def get_vietnamese_template(history_text, context, question):
-    return f"""Bạn là trợ lý AI trả lời câu hỏi dựa trên tài liệu được cung cấp.
-        Bạn hãy
-        - Trả lời "CÂU HỎI" dựa trên thông tin từ phần "NGỮ CẢNH"
-        - Nếu không có câu trả lời trong ngữ cảnh, trả lời: "Tôi không có thông tin về điều này."
+    return f"""Bạn là một AI trợ lý thông minh, chuyên trả lời câu hỏi dựa trên tài liệu.
+        Nhiệm vụ:
+        - Chỉ sử dụng thông tin từ "Ngữ cảnh" để trả lời
+        - Kết hợp với "Lịch sử hội thoại" để hiểu câu hỏi (đặc biệt là câu hỏi tiếp theo)
+        - Nếu không tìm thấy câu trả lời trong ngữ cảnh, hãy nói: "Tôi không biết"
 
         LỊCH SỬ HỘI THOẠI:
         {history_text}
@@ -20,10 +21,11 @@ def get_vietnamese_template(history_text, context, question):
     """
 
 def get_english_template(history_text, context, question):
-    return f"""You are an AI assistant that answers questions based strictly on provided documents.
-        Please
-        - Answer the "QUESTION" based on information from the "CONTEXT" section.
-        - If there is no answer in the context, reply: "I don't have information about this."
+    return f"""You are an intelligent AI assistant that answers questions based on provided documents.
+        Instructions:
+        - Use ONLY the information from the "Context"
+        - Use "Chat History" to understand follow-up questions
+        - If the answer is not in the context, say: "I don't know"
 
         CHAT HISTORY:
         {history_text}

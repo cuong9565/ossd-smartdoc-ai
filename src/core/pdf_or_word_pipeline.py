@@ -1,19 +1,11 @@
 import time
 from .config import Config
-from langchain_community.document_loaders import PDFPlumberLoader    # đọc nội dung file PDF
 from langchain_text_splitters import RecursiveCharacterTextSplitter  # chia text thành các đoạn nhỏ
 from ..advanced import assign_chunk_index_metadata
 from langchain_community.vectorstores import FAISS                   # lưu vector và tìm kiếm similarity
 import streamlit as st
 
-def load_pdf(temp_path):
-    start_time = time.time()
-    loader = PDFPlumberLoader(temp_path)
-    docs = loader.load()
-    elapsed = round(time.time() - start_time, 2) # Thời gian chạy load_pdf
-    return elapsed, docs
-
-def chunk_pdf(chunk_size: int, chunk_overlap: int, docs):
+def chunk_file(chunk_size: int, chunk_overlap: int, docs):
     start_time = time.time()
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=int(chunk_size),
