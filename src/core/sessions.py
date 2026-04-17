@@ -29,3 +29,4 @@ def init_sessions_state():
     
     if "retrieval_k" not in st.session_state:
       st.session_state.retrieval_k = None
+    
