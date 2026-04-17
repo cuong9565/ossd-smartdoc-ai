@@ -4,5 +4,6 @@ from .page import render_page
 from .header import render_header
 from .upload import render_upload_ui
 from .document_status import render_document_status_ui
-from .document_processing import document_processing
+from .document_processing_hybrid import document_processing
 from .chat_section import render_chat_section
+from .benchmark_section import render_benchmark_section

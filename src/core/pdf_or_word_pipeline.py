@@ -37,7 +37,8 @@ def chunk_file(chunk_size: int, chunk_overlap: int, docs):
 
 def embedding(documents, retrieval_k):
     start_time = time.time()
-    embedder = Config.EMBEDDER
+    embedder = Config.get_embedder()
+    print(f"[SmartDoc] Embedding device: {embedder.device}")
     vector_db = FAISS.from_documents(documents, embedder)
     elapsed = round(time.time() - start_time, 2)
 

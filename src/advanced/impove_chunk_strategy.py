@@ -37,7 +37,7 @@ def render_chunk_config():
                 "Top-K Nguồn",
                 min_value=1,
                 max_value=10,
-                value=3,
+                value=5,
                 step=1,
                 help="Số chunks truy xuất từ FAISS (dùng cho cả LLM và hiển thị nguồn)",
                 label_visibility="collapsed"

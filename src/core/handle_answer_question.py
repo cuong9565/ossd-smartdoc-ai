@@ -41,7 +41,7 @@ def handle_answer_question(question):
         prompt_template = get_english_template(history_text, context, question)
     
     # Nhận response từ promt
-    response = Config.LLM.invoke(prompt_template)
+    response = Config.get_llm().invoke(prompt_template)
 
     # Lấy ra thời gian xử lý
     elapsed_time = round(time.time() - start_time, 2)
