@@ -5,67 +5,204 @@ import re                                     # regular expressions (Biểu th�
 from .config import Config
 from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_english_template
 
-def handle_answer_question(question):
-    # Bộ đếm thời gian xử lý
-    start_time = time.time()
-    
-    # Dùng retriever đã đưa vào session từ trước để truy xuất các chunk liên quan
-    relevant_docs = st.session_state.retriever.invoke(question)
 
-    # Nối danh sách ngữ cảnh từ danh sách các chunk đã truy xuất
-    context = "\n".join([doc.page_content for doc in relevant_docs])
+def _build_history_text() -> str:
+    """
+    Xây dựng ngữ cảnh từ lịch sử chat gần nhất (để LLM hiểu ngữ cảnh).
     
-    # Lấy danh sách NUMBER_CLOSEST_CHAT cuộc trò chuyện gần nhất
+    Lấy Config.NUMBER_CLOSEST_CHAT (mặc định 6 = 3 exchanges) message gần nhất,
+    format thành "User: ... | AI: ..." để truyền vào prompt LLM.
+    
+    Bỏ qua dual messages (chế độ RAG + Graph RAG) vì chúng không có "content" trực tiếp.
+    """
     chat_history = st.session_state.chat_history_ui[-Config.NUMBER_CLOSEST_CHAT:]
+    result = []
+    for chat in chat_history:
+        # Bỏ qua dual messages (không có "content" trực tiếp)
+        if chat.get("dual"):
+            # Dùng nội dung từ RAG response cho history
+            rag_content = chat.get("rag", {}).get("content", "")
+            if rag_content:
+                result.append(f"AI: {rag_content}")
+        else:
+            content = chat.get("content", "")
+            if content:
+                prefix = "User:" if chat["role"] == "user" else "AI:"
+                result.append(f"{prefix} {content}")
+    return "\n".join(result)
 
-    # Nối danh sách lịch sử trò chuyện thành history_text
-    history_text = "\n".join([
-        f"User: {chat['content']}" if chat["role"] == "user" else f"AI: {chat['content']}"
-        for chat in chat_history
-    ])
+
+def _graph_context() -> str:
+    """
+    Xây dựng ngữ cảnh từ knowledge graph triples.
     
-    # Lưu câu hỏi user vào session
-    st.session_state.chat_history_ui.append({
-        "role": "user",
-        "content": question,
-        "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
-    })
+    Format: "subject | relation | object" cho mỗi triple
+    Dùng các triple được trích xuất bằng spacy NER/dependency parsing.
+    
+    Return: Chuỗi text chứa tất cả triples (hoặc chuỗi rỗng nếu không có triple)
+    """
+    triples = st.session_state.get("graph_triples", []) or []
+    if not triples:
+        return ""
+    return "\n".join([f"{subject} | {relation} | {object_}" for subject, relation, object_ in triples])
 
-    # Kiểm tra question có phải tiếng việt không
+
+def _invoke_llm(question: str, context: str, history_text: str) -> str:
+    """
+    Gọi LLM (Qwen2.5 chạy local qua Ollama) với prompt đã tạo.
+    
+    Steps:
+    1. Detect ngôn ngữ của câu hỏi (Tiếng Việt hay English)
+    2. Chọn template prompt tương ứng
+    3. Gọi Config.LLM.invoke() để lấy phản hồi
+    
+    Return: Phản hồi text từ LLM
+    """
     is_vietnamese = detect_is_vietnamese(question)
-    
-    # Generate prompt
     if is_vietnamese:
         prompt_template = get_vietnamese_template(history_text, context, question)
     else:
         prompt_template = get_english_template(history_text, context, question)
-    
-    # Nhận response từ promt
-    response = Config.get_llm().invoke(prompt_template)
+    return Config.LLM.invoke(prompt_template)
 
-    # Lấy ra thời gian xử lý
-    elapsed_time = round(time.time() - start_time, 2)
+
+def _build_message(question: str, mode: str = "RAG") -> dict:
+    """
+    Xây dựng thông điệp phản hồi AI từ câu hỏi và mode truy xuất.
     
-    # ── Citation tracking: chuẩn bị sources data ──
-    sources_data = [
-        {
-            "page":        doc.metadata.get('page', 0),
-            "chunk_index": doc.metadata.get('chunk_index', '—'),
-            "content":     doc.page_content,
-        }
-        for doc in relevant_docs
-    ]
+    Tùy mode RAG hoặc Graph RAG:
+    - RAG: Dùng vector embeddings để tìm chunks liên quan nhất
+    - Graph RAG: Tìm knowledge graph triples, fallback sang RAG nếu không có triples
+    
+    Return: dict với role, content, timestamp, response_time, sources, keywords, mode
+    """
+    start_time = time.time()
+    use_graph_mode = False  # Track xem có dùng Graph RAG hay fallback RAG
+    relevant_docs = []  # Lưu docs từ vector retriever
+
+    if mode == "Graph RAG":
+        # Graph RAG: Tìm entity/relation triples từ tài liệu
+        triples = st.session_state.get("graph_triples", []) or []
+        if triples:
+            # ✓ Có triples: dùng knowledge graph context cho LLM
+            use_graph_mode = True
+            context = _graph_context()
+        else:
+            # ✗ Không có triples: không fallback sang RAG, dùng context rỗng
+            context = ""
+    else:
+        # RAG mode: Vector similarity search tìm chunks gần câu hỏi nhất
+        if st.session_state.retriever is None:
+            raise RuntimeError("Retriever chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
+        relevant_docs = st.session_state.retriever.invoke(question)
+        context = "\n".join([doc.page_content for doc in relevant_docs])
+
+    # Tính toán ngữ cảnh và lịch sử để truyền vào LLM
+    history_text = _build_history_text()
+    response = _invoke_llm(question, context, history_text)
+    elapsed_time = round(time.time() - start_time, 2)
+
+    # Xây dựng sources để hiển thị trong UI
+    # Nguồn trích dẫn format khác nhau tùy mode dùng
+    if mode == "Graph RAG" and use_graph_mode:
+        # Hiển thị triples dưới dạng: "subject | relation | object"
+        sources_data = [
+            {
+                "page":        None,
+                "chunk_index": None,
+                "content":     " | ".join(triple),
+            }
+            for triple in triples
+        ]
+    else:
+        # Hiển thị chunks với metadata (page number, chunk index trong trang)
+        # Dùng cho cả RAG mode và Graph RAG fallback
+        sources_data = [
+            {
+                "page":        doc.metadata.get('page', 0),
+                "chunk_index": doc.metadata.get('chunk_index', '—'),
+                "content":     doc.page_content,
+            }
+            for doc in relevant_docs
+        ]
+
+    # Extract keywords từ câu hỏi để highlight trong sources UI
     keywords = extract_keywords(question)
 
-    # Save assistant message (kèm sources + keywords)
-    st.session_state.chat_history_ui.append({
+    return {
         "role":          "ai",
         "content":       response,
         "timestamp":     datetime.datetime.now().strftime("%H:%M:%S"),
         "response_time": elapsed_time,
         "sources":       sources_data,
         "keywords":      keywords,
+        "mode":          mode,
+    }
+
+
+def handle_answer_question(question, mode=None):
+    """
+    Xử lý một câu hỏi của user trong một mode RAG.
+    
+    Steps:
+    1. Thêm câu hỏi vào chat history với role='user'
+    2. Gọi _build_message để tạo phản hồi AI
+    3. Thêm phản hồi vào chat history với role='ai'
+    4. Return phản hồi
+    """
+    if not mode:
+        mode = st.session_state.get("rag_mode", "RAG")
+
+    # Ghi lại câu hỏi của user
+    st.session_state.chat_history_ui.append({
+        "role": "user",
+        "content": question,
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
     })
+
+    # Xây dựng và ghi lại phản hồi AI
+    answer_message = _build_message(question, mode)
+    st.session_state.chat_history_ui.append(answer_message)
+    return answer_message
+
+
+def handle_answer_question_multi(question):
+    """
+    So sánh phản hồi RAG vs Graph RAG khi chế độ kết hợp được chọn.
+    
+    Chạy tuần tự (không dùng thread) để tránh race condition trên Streamlit session_state:
+    1. Thêm user question vào chat history
+    2. Gọi _build_message cho "RAG" mode
+    3. Gọi _build_message cho "Graph RAG" mode  
+    4. Thêm một phản hồi dual vào chat history
+    5. Return dict {"RAG": msg1, "Graph RAG": msg2} để UI hiển thị side-by-side
+    """
+    if st.session_state.retriever is None:
+        raise RuntimeError("Retriever chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
+
+    st.session_state.chat_history_ui.append({
+        "role": "user",
+        "content": question,
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+    })
+
+    # Chạy tuần tự thay vì dùng ThreadPoolExecutor để tránh rủi ro race condition
+    # (Streamlit session_state không an toàn khi đọc từ nhiều thread)
+    rag_message = _build_message(question, "RAG")
+    graph_message = _build_message(question, "Graph RAG")
+
+    # Thêm một message dual
+    dual_message = {
+        "role": "ai",
+        "dual": True,
+        "rag": rag_message,
+        "graph": graph_message,
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+    }
+    st.session_state.chat_history_ui.append(dual_message)
+
+    return {"RAG": rag_message, "Graph RAG": graph_message}
+
 
 # Stopwords tiếng Việt + tiếng Anh phổ biến (dùng để lọc từ khóa)
 _STOPWORDS = {
@@ -88,6 +225,15 @@ _STOPWORDS = {
 }
 
 def extract_keywords(question: str) -> list:
-    """Tách từ khóa từ câu hỏi, loại bỏ stopwords và từ quá ngắn."""
+    """
+    Tách từ khóa từ câu hỏi (loại bỏ stopwords và từ quá ngắn).
+    
+    Dùng để highlight các từ quan trọng trong sources UI.
+    - Áp dụng regex để lấy từ (word characters)
+    - Loại bỏ stopwords tiếng Việt và tiếng Anh
+    - Loại bỏ các từ có độ dài < 2 ký tự
+    
+    Return: list của các từ khóa duy nhất (lowercase)
+    """
     words = re.findall(r'[\w]+', question.lower())
     return [w for w in words if w not in _STOPWORDS and len(w) >= 2]

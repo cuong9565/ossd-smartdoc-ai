@@ -11,6 +11,20 @@ def init_sessions_state():
         # "keywords": Danh sách keywords liên quan || None
     if "chat_history_ui" not in st.session_state:
         st.session_state.chat_history_ui = []
+    
+    # Lưu true hoặc false là có sử dụng rag_mode không
+    if "rag_mode" not in st.session_state:
+        st.session_state.rag_mode = "RAG"
+    
+    # Lưu true hoặc false là có sử dụng graph_rag_mode không
+    if "graph_rag_mode" not in st.session_state:
+        st.session_state.graph_rag_mode = False
+
+    if "graph_triples" not in st.session_state:
+        st.session_state.graph_triples = []
+
+    if "last_dual_responses" not in st.session_state:
+        st.session_state.last_dual_responses = None
 
     if "retriever" not in st.session_state:
         st.session_state.retriever = None

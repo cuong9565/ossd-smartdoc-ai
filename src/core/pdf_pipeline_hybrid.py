@@ -53,7 +53,7 @@ def embedding(documents, retrieval_k):
     start_time = time.time()
 
     # Lấy embedder từ cấu hình chung.
-    embedder = Config.get_embedder()
+    embedder = Config.EMBEDDER
  
     # Tạo retriever hybrid: dense + sparse.
     hybrid_retriever = HybridRetriever(

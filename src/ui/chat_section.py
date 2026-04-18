@@ -1,11 +1,11 @@
 import streamlit as st
 import re                                     # regular expressions (Biểu thức chính quy)
-from ..core import handle_answer_question
+from ..core import handle_answer_question, handle_answer_question_multi
 
 def render_chat_section():
     if st.session_state.retriever is not None:
         # UI Lịch sử trò chuyện
-        render_chat_history()        
+        render_chat_history()
         
         # UI Đặt câu hỏi
         question, submit_question = render_chat_input()
@@ -42,15 +42,34 @@ def render_chat_history():
                     st.caption(f"⏰ {msg['timestamp']}", unsafe_allow_html=False)
             # UI cho AI
             else:
-                with st.chat_message("assistant", avatar="🤖"):
-                    st.markdown(msg["content"])
-                    response_time = msg.get('response_time', 0)
-                    st.caption(f"⏰ {msg['timestamp']} • ⚡ {response_time}s")
-                    # ── Citation tracking: hiển thị lại sources trong history ──
-                    _hist_sources   = msg.get('sources', [])
-                    _hist_keywords  = msg.get('keywords', [])
-                    if _hist_sources:
-                        render_sources_ui(_hist_sources, _hist_keywords)
+                if msg.get("dual"):
+                    # Hiển thị dual responses với 2 cột
+                    left_col, right_col = st.columns(2)
+                    with left_col:
+                        st.markdown("### RAG")
+                        rag_msg = msg.get("rag", {})
+                        st.write(rag_msg.get("content", ""))
+                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {rag_msg.get('response_time', 0)}s")
+                        # Sources cho RAG
+                        _hist_sources_rag = rag_msg.get('sources', [])
+                        _hist_keywords_rag = rag_msg.get('keywords', [])
+                        if _hist_sources_rag:
+                            render_sources_ui(_hist_sources_rag, _hist_keywords_rag)
+                    with right_col:
+                        st.markdown("### Graph RAG")
+                        graph_msg = msg.get("graph", {})
+                        st.write(graph_msg.get("content", ""))
+                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {graph_msg.get('response_time', 0)}s")
+                else:
+                    with st.chat_message("assistant", avatar="🤖"):
+                        st.markdown(msg.get("content", ""))
+                        response_time = msg.get('response_time', 0)
+                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {response_time}s")
+                        # ── Citation tracking: hiển thị lại sources trong history (chỉ cho RAG, không cho Graph RAG) ──
+                        _hist_sources   = msg.get('sources', [])
+                        _hist_keywords  = msg.get('keywords', [])
+                        if msg.get('mode') != "Graph RAG" and _hist_sources:
+                            render_sources_ui(_hist_sources, _hist_keywords)
 
 def render_chat_input():
     st.divider()
@@ -80,23 +99,46 @@ def render_answer_question(question, submit_question):
         if not question.strip():
             st.error("⚠️ Vui lòng nhập câu hỏi!")
             return
-        
+
+        # Hiển thị tiến trình cho chế độ single mode
+        if st.session_state.get("rag_mode") != "RAG, Graph RAG":
+            progress_placeholder = st.empty()
+            progress_bar = st.progress(0)
+            progress_placeholder.text("🔍 Đang phân tích câu hỏi...")
+            progress_bar.progress(25)
+        else:
+            progress_placeholder = None
+            progress_bar = None
+
         with st.spinner("🔍 Đang xử lý..."):
             try:
-                # Xử lý câu trả lời
-                handle_answer_question(question)
+                if st.session_state.get("rag_mode") == "RAG, Graph RAG":
+                    handle_answer_question_multi(question)
+                else:
+                    if progress_placeholder:
+                        progress_placeholder.text("📄 Đang truy xuất dữ liệu...")
+                        progress_bar.progress(50)
+                    handle_answer_question(question)
+                    if progress_placeholder:
+                        progress_placeholder.text("🤖 Đang tạo phản hồi...")
+                        progress_bar.progress(75)
+                    if progress_placeholder:
+                        progress_placeholder.text("✅ Hoàn thành!")
+                        progress_bar.progress(100)
 
-                # Chạy lại UI để hiển thị câu trả lời
                 st.rerun()
-                
+
             except Exception as e:
+                if progress_placeholder:
+                    progress_placeholder.empty()
+                if progress_bar:
+                    progress_bar.empty()
                 st.error(f"""
                 ❌ **Lỗi xử lý**
                 ```
                 {str(e)}
                 ```
                 """)
-
 
 def highlight_text(text: str, keywords: list) -> str:
     """Highlight các từ khóa trong text bằng thẻ <mark class='kw-highlight'>."""
