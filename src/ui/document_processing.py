@@ -8,9 +8,9 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k):
     if uploaded_file and st.session_state.retriever is None:
         file_size_mb = uploaded_file.size / (1024 * 1024)
         
-        # If size file > 50MB
-        if file_size_mb > 50:
-            st.error(f"❌ File quá lớn ({file_size_mb:.2f}MB > 50MB)")
+        # If size file > 100MB10
+        if file_size_mb > 100:
+            st.error(f"❌ File quá lớn ({file_size_mb:.2f}MB > 100MB)")
             return
         
         # Check if suffix uploaded_file is pdf or word

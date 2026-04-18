@@ -1,6 +1,21 @@
 import streamlit as st
 import os
 
+def rewrite_vietnamese_template(history,question):
+    return f"""Bạn là một chuyên gia tối ưu hóa tìm kiếm thông tin.
+    Nhiệm vụ:
+    - Dựa vào ngữ cảnh trò chuyện, viết lại câu hỏi cuối cùng của người dùng để làm rõ mọi đại từ (nó, phương pháp này, thuật toán đó...) thành các danh từ/thuật ngữ cụ thể.
+    - ếu câu hỏi đã rõ ràng và không phụ thuộc vào lịch sử, hãy giữ nguyên hoặc tối ưu thêm từ khóa.
+    - Làm rõ nghĩa các từ viết tắt nếu có thể đoán được ngữ cảnh
+    - Sử dụng thông tin từ "Lịch sử Chat" để viết lại "Câu hỏi ban đầu" nếu thấy thông tin từ L
+    - Bổ sung các từ khóa đồng nghĩa quan trọng
+    - KHÔNG trả lời câu hỏi
+    - Chỉ in ra câu hỏi được viết lại, tuyệt đổi không giải thích hay thêm văn bản phụ
+    
+    Câu hỏi ban đầu: {question}
+    Lịch sử trò chuyện gần đây: {history}
+    Câu hỏi tối ưu:
+    """
 def get_vietnamese_template(history_text, context, question):
     return f"""Bạn là một AI trợ lý thông minh, chuyên trả lời câu hỏi dựa trên tài liệu.
         Nhiệm vụ:

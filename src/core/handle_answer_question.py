@@ -2,19 +2,30 @@ import streamlit as st
 import time
 import datetime
 import re                                     # regular expressions (Biểu thức chính quy)
+
+from langchain_core.prompts import PromptTemplate
+
 from .config import Config
-from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_english_template
+from .prompt_template import rewrite_vietnamese_template,detect_is_vietnamese, get_vietnamese_template, get_english_template
+
+def call_llm_to_rewrite(history_text,question):
+
+    rewrite_template=rewrite_vietnamese_template(history_text,question)
+    prompt= PromptTemplate(
+        template=rewrite_template,
+        input_variables=["question"],
+    )
+
+    rewrite_chain=prompt | Config.LLM
+
+    rewritten_question= rewrite_chain.invoke({"question": question}).strip()
+    if not rewritten_question:
+        return question
+    return rewritten_question
 
 def handle_answer_question(question):
     # Bộ đếm thời gian xử lý
     start_time = time.time()
-    
-    # Dùng retriever đã đưa vào session từ trước để truy xuất các chunk liên quan
-    relevant_docs = st.session_state.retriever.invoke(question)
-
-    # Nối danh sách ngữ cảnh từ danh sách các chunk đã truy xuất
-    context = "\n".join([doc.page_content for doc in relevant_docs])
-    
     # Lấy danh sách NUMBER_CLOSEST_CHAT cuộc trò chuyện gần nhất
     chat_history = st.session_state.chat_history_ui[-Config.NUMBER_CLOSEST_CHAT:]
 
@@ -23,7 +34,19 @@ def handle_answer_question(question):
         f"User: {chat['content']}" if chat["role"] == "user" else f"AI: {chat['content']}"
         for chat in chat_history
     ])
+
+    #Viết lại câu hỏi
+    rewritten_question= call_llm_to_rewrite(history_text,question)
+    print("Câu hỏi cũ: "+question)
+    print("Câu hỏi mới: "+ rewritten_question)
+
+    # Dùng retriever đã đưa vào session từ trước để truy xuất các chunk liên quan
+    relevant_docs = st.session_state.retriever.invoke(rewritten_question)
+    # Nối danh sách ngữ cảnh từ danh sách các chunk đã truy xuất
+    context = "\n".join([doc.page_content for doc in relevant_docs])
+
     
+
     # Lưu câu hỏi user vào session
     st.session_state.chat_history_ui.append({
         "role": "user",
