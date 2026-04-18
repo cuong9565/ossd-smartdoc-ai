@@ -37,3 +37,10 @@ def init_sessions_state():
 
     if "document_chunks" not in st.session_state:
         st.session_state.document_chunks = 0
+        
+    if "documents" not in st.session_state:
+      st.session_state.documents = None
+    
+    if "retrieval_k" not in st.session_state:
+      st.session_state.retrieval_k = None
+    

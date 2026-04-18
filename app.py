@@ -1,8 +1,10 @@
 import torch
 torch.classes.__path__ = []
-
+import streamlit as st
 from src.core import init_sessions_state
 from src.ui import load_css, render_sidebar, render_page, render_header, render_upload_ui, render_document_status_ui, document_processing, render_chat_section
+from src.ui.multi_document_processing import render_multi_document_processing
+from src.ui.multi_document_chat import render_multi_document_chat
 from src.advanced import render_chunk_config
 
 def main():
