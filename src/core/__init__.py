@@ -1,3 +1,3 @@
 from .pdf_or_word_pipeline import chunk_file, embedding
 from .sessions import init_sessions_state
-from .handle_answer_question import handle_answer_question
+from .handle_answer_question import handle_answer_question, handle_answer_question_multi

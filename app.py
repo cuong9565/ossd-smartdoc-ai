@@ -12,7 +12,7 @@ def main():
     # Load UI
     render_page()
     load_css()
-    render_sidebar()
+    rag_mode = render_sidebar()
     render_header()
 
     # Config chung_size, chunk_overlap, retieval_k UI
@@ -25,7 +25,7 @@ def main():
     render_document_status_ui()
 
     # Document Processing Flow
-    document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k)
+    document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, rag_mode)
 
     # UI chat history && chat question
     render_chat_section()

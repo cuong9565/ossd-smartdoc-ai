@@ -127,18 +127,19 @@ def load_css():
 
             /* ============== CARDS & CONTAINERS ============== */
             .card {
-                background-color: #FFFFFF;
+                background: rgba(255,255,255,0.05);
+                padding: 0.9rem;
                 border-radius: 12px;
-                padding: 20px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-                border: 1px solid #E3E6EB;
-                margin: 0.5rem 0;
-                transition: all 0.3s ease;
+                margin-bottom: 0.8rem;
+                border: 1px solid rgba(255,255,255,0.08);
             }
-
             .card:hover {
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-                border-color: #DEE2E6;
+                border: 1px solid rgba(0,123,255,0.5);
+                transition: 0.2s;
+            }
+            .small-text {
+                font-size: 0.8rem;
+                opacity: 0.7;
             }
 
             .answer-card {
