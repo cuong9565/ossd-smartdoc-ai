@@ -18,6 +18,7 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
             tmp.write(uploaded_file.getbuffer())
             temp_path = tmp.name
 
+        st.session_state.rag_mode = rag_mode
         st.session_state.uploaded_file_name = uploaded_file.name
         st.session_state.graph_triples = []
 
@@ -95,6 +96,7 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
                     os.remove(temp_path)
                 except Exception:
                     pass
+        st.rerun()
 
 def process_rag(container, temp_path, suffix, chunk_size, chunk_overlap, retrieval_k):
     with container:
