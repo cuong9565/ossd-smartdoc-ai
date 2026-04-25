@@ -39,7 +39,7 @@ def render_sidebar():
         """, unsafe_allow_html=True)
         
         # ========== ACTIONS CLEAR DATA ==========
-        if st.session_state.retriever is not None:
+        if st.session_state.rag_mode is not None:
             st.subheader("📋 Manage", divider=False)
             col1, col2 = st.columns(2)
             with col1:
@@ -56,18 +56,20 @@ def render_sidebar():
                     st.session_state.chat_history_ui = []
                     st.session_state.graph_triples = []
                     st.session_state.last_dual_responses = None
-                    st.session_state.rag_mode = "RAG"
+                    st.session_state.rag_mode = None
                     st.toast("✓ Reset done")
                     st.rerun()
 
         # ========== ACTIONS SELECT MODE ==========
-        options_mode = ["RAG", "Graph RAG", "RAG, Graph RAG"]
-        st.subheader("⚡ Mode", divider=False)
-        rag_mode = st.selectbox(
-            label = "Chọn chế độ RAG",
-            options = options_mode,
-            index = options_mode.index(st.session_state.rag_mode) if st.session_state.rag_mode in options_mode else 0
-        )
+        rag_mode = None
+        if st.session_state.rag_mode is None:
+            options_mode = ["RAG", "Graph RAG", "RAG, Graph RAG"]
+            st.subheader("⚡ Mode", divider=False)
+            rag_mode = st.selectbox(
+                label = "Chọn chế độ RAG",
+                options = options_mode,
+                index = options_mode.index(st.session_state.rag_mode) if st.session_state.rag_mode in options_mode else 0
+            )
         
         # ========== FOOTER ==========
         st.markdown("""

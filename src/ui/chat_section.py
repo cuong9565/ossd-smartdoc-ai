@@ -3,7 +3,7 @@ import re                                     # regular expressions (Biểu th�
 from ..core import handle_answer_question, handle_answer_question_multi
 
 def render_chat_section():
-    if st.session_state.retriever is not None:
+    if st.session_state.rag_mode is not None:
         # UI Lịch sử trò chuyện
         render_chat_history()
         
@@ -72,24 +72,25 @@ def render_chat_history():
                             render_sources_ui(_hist_sources, _hist_keywords)
 
 def render_chat_input():
-    st.divider()
-    st.subheader("❓ Đặt câu hỏi", divider=True)
-    
-    with st.form(key="question_form", border=False):
-        question = st.text_area(
-            "Nhập câu hỏi:",
-            placeholder="Ví dụ: Các bước cài đặt là gì?",
-            height=100,
-            label_visibility="collapsed"
-        )
+    if st.session_state.rag_mode is not None:
+        st.divider()
+        st.subheader("❓ Đặt câu hỏi", divider=True)
         
-        col1, col2 = st.columns([4, 1])
-        with col2:
-            submit_question = st.form_submit_button(
-                "📤 Gửi",
-                use_container_width=True,
-                type="primary"
+        with st.form(key="question_form", border=False):
+            question = st.text_area(
+                "Nhập câu hỏi:",
+                placeholder="Ví dụ: Các bước cài đặt là gì?",
+                height=100,
+                label_visibility="collapsed"
             )
+            
+            col1, col2 = st.columns([4, 1])
+            with col2:
+                submit_question = st.form_submit_button(
+                    "📤 Gửi",
+                    use_container_width=True,
+                    type="primary"
+                )
     
     return question, submit_question
 

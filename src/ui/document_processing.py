@@ -5,7 +5,7 @@ from ..core import chunk_file, embedding
 from ..advanced import load_file, extract_triples, build_graph, save_graph
 
 def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, rag_mode):
-    if uploaded_file and st.session_state.retriever is None:
+    if uploaded_file and st.session_state.rag_mode is None:
         file_size_mb = uploaded_file.size / (1024 * 1024)
 
         if file_size_mb > 50:

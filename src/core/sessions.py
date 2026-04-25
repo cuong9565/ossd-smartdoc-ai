@@ -15,7 +15,7 @@ def init_sessions_state():
     
     # "RAG" | "Graph RAG" | "RAG, Graph RAG"
     if "rag_mode" not in st.session_state:
-        st.session_state.rag_mode = "RAG"
+        st.session_state.rag_mode = None
     
     # danh sách triples từ knowledge graph
     if "graph_triples" not in st.session_state:
