@@ -57,18 +57,17 @@ def render_sidebar():
                     st.session_state.graph_triples = []
                     st.session_state.last_dual_responses = None
                     st.session_state.rag_mode = "RAG"
-                    st.session_state.graph_rag_mode = False
                     st.toast("✓ Reset done")
                     st.rerun()
 
         # ========== ACTIONS SELECT MODE ==========
+        options_mode = ["RAG", "Graph RAG", "RAG, Graph RAG"]
         st.subheader("⚡ Mode", divider=False)
         rag_mode = st.selectbox(
-            "Chọn chế độ RAG", 
-            ["RAG", "Graph RAG", "RAG, Graph RAG"]
+            label = "Chọn chế độ RAG",
+            options = options_mode,
+            index = options_mode.index(st.session_state.rag_mode) if st.session_state.rag_mode in options_mode else 0
         )
-        st.session_state.rag_mode = rag_mode
-        st.session_state.graph_rag_mode = rag_mode in ["Graph RAG", "RAG, Graph RAG"]
         
         # ========== FOOTER ==========
         st.markdown("""

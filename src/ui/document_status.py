@@ -2,6 +2,9 @@ import streamlit as st
 
 def render_document_status_ui():
     if st.session_state.retriever is not None:
+        with st.expander(label="📂 Danh sách tài liệu", expanded=False):
+            st.write(st.session_state.uploaded_file_name)
+        
         with st.container():
             st.markdown("""
             <div style="background-color: #E7F3FF; border-left: 4px solid #007BFF; padding: 0.75rem; border-radius: 8px; margin: 0.5rem 0;">

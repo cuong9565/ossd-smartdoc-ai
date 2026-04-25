@@ -170,33 +170,6 @@ def load_css():
                 margin: 0.75rem 0;
             }
 
-            /* ============== STATUS & ALERT MESSAGES ============== */
-            .stAlert {
-                border-radius: 10px !important;
-                border: none !important;
-                padding: 1rem !important;
-            }
-
-            .stSuccess {
-                background-color: #D4EDDA !important;
-                color: #155724 !important;
-            }
-
-            .stError {
-                background-color: #F8D7DA !important;
-                color: #721C24 !important;
-            }
-
-            .stWarning {
-                background-color: #FFF3CD !important;
-                color: #856404 !important;
-            }
-
-            .stInfo {
-                background-color: #D1ECF1 !important;
-                color: #0C5460 !important;
-            }
-
             /* ============== HEADERS & TEXT ============== */
             h1 {
                 color: #212529 !important;
