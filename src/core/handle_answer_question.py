@@ -92,7 +92,7 @@ def _build_message(question: str, mode: str = "RAG") -> dict:
             context = ""
     else:
         # RAG mode: Vector similarity search tìm chunks gần câu hỏi nhất
-        if st.session_state.retriever is None:
+        if st.session_state.rag_mode["name"] is None:
             raise RuntimeError("Retriever chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
         relevant_docs = st.session_state.retriever.invoke(question)
         context = "\n".join([doc.page_content for doc in relevant_docs])
@@ -151,7 +151,7 @@ def handle_answer_question(question, mode=None):
     4. Return phản hồi
     """
     if not mode:
-        mode = st.session_state.get("rag_mode", "RAG")
+        mode = st.session_state.rag_mode["name"]
 
     # Ghi lại câu hỏi của user
     st.session_state.chat_history_ui.append({
@@ -177,8 +177,6 @@ def handle_answer_question_multi(question):
     4. Thêm một phản hồi dual vào chat history
     5. Return dict {"RAG": msg1, "Graph RAG": msg2} để UI hiển thị side-by-side
     """
-    if st.session_state.retriever is None:
-        raise RuntimeError("Retriever chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
 
     st.session_state.chat_history_ui.append({
         "role": "user",

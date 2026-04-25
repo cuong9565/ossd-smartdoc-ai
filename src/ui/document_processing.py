@@ -30,10 +30,11 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
                     documents = _do_step_chunk_file(     stepcurr=2, numstep=3, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
                     _ =         _do_step_embedding(      stepcurr=3, numstep=3, documents=documents, retrieval_k=retrieval_k)
                 elif rag_mode == "Graph RAG":
-                    docs =      _do_step_load_file(      stepcurr=1, numstep=4, temp_path=temp_path, suffix=suffix)
-                    documents = _do_step_chunk_file(     stepcurr=2, numstep=4, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
-                    triples =   _do_step_extract_triples(stepcurr=3, numstep=4, documents=documents)
-                    _ =         _do_step_build_graph(    stepcurr=4, numstep=4, triples=triples)
+                    docs =      _do_step_load_file(      stepcurr=1, numstep=5, temp_path=temp_path, suffix=suffix)
+                    documents = _do_step_chunk_file(     stepcurr=2, numstep=5, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
+                    _ =         _do_step_embedding(      stepcurr=3, numstep=5, documents=documents, retrieval_k=retrieval_k)
+                    triples =   _do_step_extract_triples(stepcurr=4, numstep=5, documents=documents)
+                    _ =         _do_step_build_graph(    stepcurr=5, numstep=5, triples=triples)
                 else:
                     docs =      _do_step_load_file(      stepcurr=1, numstep=5, temp_path=temp_path, suffix=suffix)
                     documents = _do_step_chunk_file(     stepcurr=2, numstep=5, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
