@@ -3,7 +3,7 @@ import re                                     # regular expressions (Biểu th�
 from ..core import handle_answer_question, handle_answer_question_multi
 
 def render_chat_section():
-    if st.session_state.rag_mode is not None:
+    if st.session_state.rag_mode["name"] is not None:
         # UI Lịch sử trò chuyện
         render_chat_history()
         
@@ -72,7 +72,7 @@ def render_chat_history():
                             render_sources_ui(_hist_sources, _hist_keywords)
 
 def render_chat_input():
-    if st.session_state.rag_mode is not None:
+    if st.session_state.rag_mode["name"] is not None:
         st.divider()
         st.subheader("❓ Đặt câu hỏi", divider=True)
         

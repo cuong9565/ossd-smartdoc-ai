@@ -1,18 +1,11 @@
 import streamlit as st
 
 def render_document_status_ui():
-    if st.session_state.rag_mode is not None:
+    if st.session_state.rag_mode["name"] is not None:
         with st.expander(label="📂 Danh sách tài liệu", expanded=False):
-            st.write(st.session_state.uploaded_file_name)
-        
-        with st.container():
-            st.markdown("""
-            <div style="background-color: #E7F3FF; border-left: 4px solid #007BFF; padding: 0.75rem; border-radius: 8px; margin: 0.5rem 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <p style="margin: 0; color: #0C5460; font-weight: 600; font-size: 0.95rem;">📄 Tài liệu: <strong>""" + 
-                        str(st.session_state.document_chunks) + """ chunks</strong></p>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.success(st.session_state.uploaded_file_name)
+
+        with st.expander(label="📄 Thông tin xử lý tài liệu", expanded=False):
+            st.success(f"Chế độ: **{st.session_state.rag_mode["name"]}**")
+            for step in st.session_state.rag_mode["step"]:
+                st.success(step)

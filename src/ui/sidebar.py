@@ -39,7 +39,7 @@ def render_sidebar():
         """, unsafe_allow_html=True)
         
         # ========== ACTIONS CLEAR DATA ==========
-        if st.session_state.rag_mode is not None:
+        if st.session_state.rag_mode["name"] is not None:
             st.subheader("📋 Manage", divider=False)
             col1, col2 = st.columns(2)
             with col1:
@@ -51,24 +51,26 @@ def render_sidebar():
                 if st.button("🗑️ Clear All", use_container_width=True):
                     st.session_state.retriever = None
                     st.session_state.vector_db = None
-                    st.session_state.document_chunks = 0
                     st.session_state.uploaded_file_name = None
                     st.session_state.chat_history_ui = []
                     st.session_state.graph_triples = []
                     st.session_state.last_dual_responses = None
-                    st.session_state.rag_mode = None
+                    st.session_state.rag_mode = {
+                        "name": None,
+                        "step": []
+                    }
                     st.toast("✓ Reset done")
                     st.rerun()
 
         # ========== ACTIONS SELECT MODE ==========
         rag_mode = None
-        if st.session_state.rag_mode is None:
+        if st.session_state.rag_mode["name"] is None:
             options_mode = ["RAG", "Graph RAG", "RAG, Graph RAG"]
             st.subheader("⚡ Mode", divider=False)
             rag_mode = st.selectbox(
                 label = "Chọn chế độ RAG",
                 options = options_mode,
-                index = options_mode.index(st.session_state.rag_mode) if st.session_state.rag_mode in options_mode else 0
+                index = options_mode.index(st.session_state.rag_mode["name"]) if st.session_state.rag_mode["name"] in options_mode else 0
             )
         
         # ========== FOOTER ==========
