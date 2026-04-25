@@ -1,7 +1,7 @@
 import streamlit as st
 
 def render_document_status_ui():
-    if st.session_state.retriever is not None:
+    if st.session_state.rag_mode is not None:
         with st.expander(label="📂 Danh sách tài liệu", expanded=False):
             st.write(st.session_state.uploaded_file_name)
         
