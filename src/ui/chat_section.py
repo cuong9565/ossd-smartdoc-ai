@@ -3,7 +3,7 @@ import re                                     # regular expressions (Biểu th�
 from ..core import handle_answer_question, handle_answer_question_multi
 
 def render_chat_section():
-    if st.session_state.rag_mode is not None:
+    if st.session_state.rag_mode["name"] is not None:
         # UI Lịch sử trò chuyện
         render_chat_history()
         
@@ -72,7 +72,7 @@ def render_chat_history():
                             render_sources_ui(_hist_sources, _hist_keywords)
 
 def render_chat_input():
-    if st.session_state.rag_mode is not None:
+    if st.session_state.rag_mode["name"] is not None:
         st.divider()
         st.subheader("❓ Đặt câu hỏi", divider=True)
         
@@ -101,45 +101,17 @@ def render_answer_question(question, submit_question):
             st.error("⚠️ Vui lòng nhập câu hỏi!")
             return
 
-        # Hiển thị tiến trình cho chế độ single mode
-        if st.session_state.get("rag_mode") != "RAG, Graph RAG":
-            progress_placeholder = st.empty()
-            progress_bar = st.progress(0)
-            progress_placeholder.text("🔍 Đang phân tích câu hỏi...")
-            progress_bar.progress(25)
-        else:
-            progress_placeholder = None
-            progress_bar = None
-
         with st.spinner("🔍 Đang xử lý..."):
             try:
-                if st.session_state.get("rag_mode") == "RAG, Graph RAG":
+                if st.session_state.rag_mode["name"] == "RAG, Graph RAG":
                     handle_answer_question_multi(question)
                 else:
-                    if progress_placeholder:
-                        progress_placeholder.text("📄 Đang truy xuất dữ liệu...")
-                        progress_bar.progress(50)
                     handle_answer_question(question)
-                    if progress_placeholder:
-                        progress_placeholder.text("🤖 Đang tạo phản hồi...")
-                        progress_bar.progress(75)
-                    if progress_placeholder:
-                        progress_placeholder.text("✅ Hoàn thành!")
-                        progress_bar.progress(100)
 
                 st.rerun()
 
             except Exception as e:
-                if progress_placeholder:
-                    progress_placeholder.empty()
-                if progress_bar:
-                    progress_bar.empty()
-                st.error(f"""
-                ❌ **Lỗi xử lý**
-                ```
-                {str(e)}
-                ```
-                """)
+                st.error(f"❌ **Lỗi xử lý: **{str(e)}")
 
 def highlight_text(text: str, keywords: list) -> str:
     """Highlight các từ khóa trong text bằng thẻ <mark class='kw-highlight'>."""

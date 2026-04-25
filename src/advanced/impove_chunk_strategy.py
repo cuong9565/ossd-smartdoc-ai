@@ -5,7 +5,7 @@ def render_chunk_config():
     chunk_overlap = 0
     retrieval_k = 0
 
-    if st.session_state.rag_mode is None:
+    if st.session_state.rag_mode["name"] is None:
         with st.expander("⚙️ **Cấu hình Chunking**", expanded=True):
             col1, col2, col3 = st.columns(3)
             

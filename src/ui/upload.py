@@ -7,7 +7,7 @@ import streamlit as st
 def render_upload_ui():
     uploaded_file = None
     
-    if st.session_state.rag_mode is None:
+    if st.session_state.rag_mode["name"] is None:
         with st.container():
             st.subheader("📤 Tải file pdf hoặc word")
 

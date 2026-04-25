@@ -13,9 +13,14 @@ def init_sessions_state():
     if "chat_history_ui" not in st.session_state:
         st.session_state.chat_history_ui = []
     
-    # "RAG" | "Graph RAG" | "RAG, Graph RAG"
+    # name: "RAG" | "Graph RAG" | "RAG, Graph RAG"
+    # step: []
     if "rag_mode" not in st.session_state:
-        st.session_state.rag_mode = None
+        st.session_state.rag_mode = {
+            "name": None,
+            "step": []
+        }
+
     
     # danh sách triples từ knowledge graph
     if "graph_triples" not in st.session_state:
@@ -36,10 +41,6 @@ def init_sessions_state():
     # tên file đã upload
     if "uploaded_file_name" not in st.session_state:
         st.session_state.uploaded_file_name = None
-
-    # số lượng chunks
-    if "document_chunks" not in st.session_state:
-        st.session_state.document_chunks = 0
         
     # danh sách documents
     if "documents" not in st.session_state:

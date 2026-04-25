@@ -87,7 +87,7 @@ def load_css():
             /* ============== FILE UPLOADER ============== */
             [data-testid="stFileUploader"] {
                 border: 2px dashed #FFC107 !important;
-                padding: 2rem !important;
+                padding: 1rem !important;
                 border-radius: 12px !important;
                 background-color: #FFFBF0 !important;
                 transition: all 0.3s ease;
