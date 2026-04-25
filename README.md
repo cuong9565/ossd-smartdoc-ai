@@ -7,7 +7,7 @@
 ## Demo
 
 Chạy tại:
-http://localhost:8501
+[http://localhost:8501](http://localhost:8501)
 
 ---
 
@@ -28,14 +28,17 @@ apt update
 apt upgrade
 
 # Python
+
 python3 --version
 apt install python3
 
 # pip
+
 pip3 --version
 apt install python3-pip
 
 # Ollama
+
 ollama --version
 snap install ollama
 
@@ -55,22 +58,28 @@ snap install ollama
 ## Cài đặt lần đầu
 
 # Clone project
-git clone https://github.com/cuong9565/ossd-smartdoc-ai.git
+
+git clone [https://github.com/cuong9565/ossd-smartdoc-ai.git](https://github.com/cuong9565/ossd-smartdoc-ai.git)
 cd ossd-smartdoc-ai
 
 # Tạo virtual environment
+
 python3.12 -m venv venv
 
 # Kích hoạt môi trường
+
 source venv/bin/activate
 
 # Tải model (~4.7GB)
+
 ollama pull qwen2.5:7b
 
 # Kiểm tra model
+
 ollama list
 
 # Cài thư viện
+
 pip install -r requirements.txt
 
 ---
@@ -102,11 +111,10 @@ streamlit run app.py
 ## Lưu ý
 
 - Model qwen2.5:7b cần:
-  + RAM tối thiểu: 8GB
-  + Khuyến nghị: 16GB
-
+  - RAM tối thiểu: 8GB
+  - Khuyến nghị: 16GB
 - Nếu lỗi thiếu RAM:
-  ollama pull qwen2.5:3b
+ollama pull qwen2.5:3b
 
 ---
 
@@ -196,3 +204,4 @@ smartdoc_ai/
 │
 └── requirements.txt
 ```
+

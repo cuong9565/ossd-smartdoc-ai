@@ -82,4 +82,4 @@ def embedding(documents, retrieval_k):
     # Save retriever to session
     st.session_state.retriever = compression_retriever
 
-    return elapsed
+    return elapsed, vector_db, compression_retriever

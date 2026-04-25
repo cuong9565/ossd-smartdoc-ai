@@ -87,7 +87,7 @@ def load_css():
             /* ============== FILE UPLOADER ============== */
             [data-testid="stFileUploader"] {
                 border: 2px dashed #FFC107 !important;
-                padding: 2rem !important;
+                padding: 1rem !important;
                 border-radius: 12px !important;
                 background-color: #FFFBF0 !important;
                 transition: all 0.3s ease;
@@ -127,18 +127,19 @@ def load_css():
 
             /* ============== CARDS & CONTAINERS ============== */
             .card {
-                background-color: #FFFFFF;
+                background: rgba(255,255,255,0.05);
+                padding: 0.9rem;
                 border-radius: 12px;
-                padding: 20px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-                border: 1px solid #E3E6EB;
-                margin: 0.5rem 0;
-                transition: all 0.3s ease;
+                margin-bottom: 0.8rem;
+                border: 1px solid rgba(255,255,255,0.08);
             }
-
             .card:hover {
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-                border-color: #DEE2E6;
+                border: 1px solid rgba(0,123,255,0.5);
+                transition: 0.2s;
+            }
+            .small-text {
+                font-size: 0.8rem;
+                opacity: 0.7;
             }
 
             .answer-card {
@@ -167,33 +168,6 @@ def load_css():
                 padding: 12px 16px;
                 border-radius: 6px;
                 margin: 0.75rem 0;
-            }
-
-            /* ============== STATUS & ALERT MESSAGES ============== */
-            .stAlert {
-                border-radius: 10px !important;
-                border: none !important;
-                padding: 1rem !important;
-            }
-
-            .stSuccess {
-                background-color: #D4EDDA !important;
-                color: #155724 !important;
-            }
-
-            .stError {
-                background-color: #F8D7DA !important;
-                color: #721C24 !important;
-            }
-
-            .stWarning {
-                background-color: #FFF3CD !important;
-                color: #856404 !important;
-            }
-
-            .stInfo {
-                background-color: #D1ECF1 !important;
-                color: #0C5460 !important;
             }
 
             /* ============== HEADERS & TEXT ============== */

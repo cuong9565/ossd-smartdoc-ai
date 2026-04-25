@@ -1,11 +1,11 @@
 import streamlit as st
 import re                                     # regular expressions (Biểu thức chính quy)
-from ..core import handle_answer_question
+from ..core import handle_answer_question, handle_answer_question_multi
 
 def render_chat_section():
-    if st.session_state.retriever is not None:
+    if st.session_state.rag_mode["name"] is not None:
         # UI Lịch sử trò chuyện
-        render_chat_history()        
+        render_chat_history()
         
         # UI Đặt câu hỏi
         question, submit_question = render_chat_input()
@@ -42,35 +42,55 @@ def render_chat_history():
                     st.caption(f"⏰ {msg['timestamp']}", unsafe_allow_html=False)
             # UI cho AI
             else:
-                with st.chat_message("assistant", avatar="🤖"):
-                    st.markdown(msg["content"])
-                    response_time = msg.get('response_time', 0)
-                    st.caption(f"⏰ {msg['timestamp']} • ⚡ {response_time}s")
-                    # ── Citation tracking: hiển thị lại sources trong history ──
-                    _hist_sources   = msg.get('sources', [])
-                    _hist_keywords  = msg.get('keywords', [])
-                    if _hist_sources:
-                        render_sources_ui(_hist_sources, _hist_keywords)
+                if msg.get("dual"):
+                    # Hiển thị dual responses với 2 cột
+                    left_col, right_col = st.columns(2)
+                    with left_col:
+                        st.markdown("### RAG")
+                        rag_msg = msg.get("rag", {})
+                        st.write(rag_msg.get("content", ""))
+                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {rag_msg.get('response_time', 0)}s")
+                        # Sources cho RAG
+                        _hist_sources_rag = rag_msg.get('sources', [])
+                        _hist_keywords_rag = rag_msg.get('keywords', [])
+                        if _hist_sources_rag:
+                            render_sources_ui(_hist_sources_rag, _hist_keywords_rag)
+                    with right_col:
+                        st.markdown("### Graph RAG")
+                        graph_msg = msg.get("graph", {})
+                        st.write(graph_msg.get("content", ""))
+                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {graph_msg.get('response_time', 0)}s")
+                else:
+                    with st.chat_message("assistant", avatar="🤖"):
+                        st.markdown(msg.get("content", ""))
+                        response_time = msg.get('response_time', 0)
+                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {response_time}s")
+                        # ── Citation tracking: hiển thị lại sources trong history (chỉ cho RAG, không cho Graph RAG) ──
+                        _hist_sources   = msg.get('sources', [])
+                        _hist_keywords  = msg.get('keywords', [])
+                        if msg.get('mode') != "Graph RAG" and _hist_sources:
+                            render_sources_ui(_hist_sources, _hist_keywords)
 
 def render_chat_input():
-    st.divider()
-    st.subheader("❓ Đặt câu hỏi", divider=True)
-    
-    with st.form(key="question_form", border=False):
-        question = st.text_area(
-            "Nhập câu hỏi:",
-            placeholder="Ví dụ: Các bước cài đặt là gì?",
-            height=100,
-            label_visibility="collapsed"
-        )
+    if st.session_state.rag_mode["name"] is not None:
+        st.divider()
+        st.subheader("❓ Đặt câu hỏi", divider=True)
         
-        col1, col2 = st.columns([4, 1])
-        with col2:
-            submit_question = st.form_submit_button(
-                "📤 Gửi",
-                use_container_width=True,
-                type="primary"
+        with st.form(key="question_form", border=False):
+            question = st.text_area(
+                "Nhập câu hỏi:",
+                placeholder="Ví dụ: Các bước cài đặt là gì?",
+                height=100,
+                label_visibility="collapsed"
             )
+            
+            col1, col2 = st.columns([4, 1])
+            with col2:
+                submit_question = st.form_submit_button(
+                    "📤 Gửi",
+                    use_container_width=True,
+                    type="primary"
+                )
     
     return question, submit_question
 
@@ -80,23 +100,18 @@ def render_answer_question(question, submit_question):
         if not question.strip():
             st.error("⚠️ Vui lòng nhập câu hỏi!")
             return
-        
+
         with st.spinner("🔍 Đang xử lý..."):
             try:
-                # Xử lý câu trả lời
-                handle_answer_question(question)
+                if st.session_state.rag_mode["name"] == "RAG, Graph RAG":
+                    handle_answer_question_multi(question)
+                else:
+                    handle_answer_question(question)
 
-                # Chạy lại UI để hiển thị câu trả lời
                 st.rerun()
-                
-            except Exception as e:
-                st.error(f"""
-                ❌ **Lỗi xử lý**
-                ```
-                {str(e)}
-                ```
-                """)
 
+            except Exception as e:
+                st.error(f"❌ **Lỗi xử lý: **{str(e)}")
 
 def highlight_text(text: str, keywords: list) -> str:
     """Highlight các từ khóa trong text bằng thẻ <mark class='kw-highlight'>."""
