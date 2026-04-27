@@ -1,5 +1,6 @@
 import streamlit as st
 from ..core.ingest import ingest_uploaded_files
+from src.presistance.history_manager import save_retriever_state
 
 def render_multi_document_processing():
   st.subheader("Upload nhiều tài liệu")
@@ -30,6 +31,17 @@ def render_multi_document_processing():
 
         st.session_state.documents = documents
         st.session_state.retrieval_k = retrieval_k
+        try:
+          save_retriever_state(
+            st.session_state.session_id,
+            "Hybrid",
+            int(retrieval_k),
+            int(chunk_size),
+            int(chunk_overlap),
+          )
+        except Exception:
+          # Không để lỗi DB làm hỏng flow ingest
+          pass
         st.success("Tài liệu đã được xử lý thành công")
         
         st.markdown("### Danh sách file đã upload")

@@ -1,4 +1,6 @@
 import torch
+
+from src.presistance.db import init_db
 torch.classes.__path__ = []
 import streamlit as st
 from src.core import init_sessions_state
@@ -7,8 +9,11 @@ from src.ui.multi_document_processing import render_multi_document_processing
 from src.ui.multi_document_chat import render_multi_document_chat
 from src.advanced import render_chunk_config
 
+from src.ui import load_css, render_sidebar, render_page, render_header
+
 def main():
-    # Init Session State
+    # Init DB + Session State
+    init_db()
     init_sessions_state()
 
     # Load UI

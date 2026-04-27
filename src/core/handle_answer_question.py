@@ -2,6 +2,9 @@ import streamlit as st
 import time
 import datetime
 import re
+from src.presistance.history_manager import save_messages
+from .config import Config
+from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_english_template
 
 from langchain_core.prompts import PromptTemplate
 
@@ -197,17 +200,24 @@ def handle_answer_question(question, mode=None):
     """
     if not mode:
         mode = st.session_state.rag_mode["name"]
-
-    # Ghi lại câu hỏi của user
-    st.session_state.chat_history_ui.append({
-        "role": "user",
-        "content": question,
+    user_msg = {
+        "role" : "user",
+        "content" : question,
+        "response": "",
         "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
-    })
-
+        "sources": [],
+        "keywords": [],
+    }
+    # Ghi lại câu hỏi của user
+    st.session_state.chat_history_ui.append(user_msg)
+    save_messages(st.session_state.session_id, user_msg)
     # Xây dựng và ghi lại phản hồi AI
     answer_message = _build_message(question, mode)
+    answer_message["response"] = answer_message["content"]
     st.session_state.chat_history_ui.append(answer_message)
+
+    
+    save_messages(st.session_state.session_id, answer_message)
     return answer_message
 
 
@@ -223,11 +233,15 @@ def handle_answer_question_multi(question):
     5. Return dict {"RAG": msg1, "Graph RAG": msg2} để UI hiển thị side-by-side
     """
 
-    st.session_state.chat_history_ui.append({
+    user_msg = {
         "role": "user",
         "content": question,
+        "response": "",
         "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
-    })
+        "sources": [],
+        "keywords": [],
+    }
+    st.session_state.chat_history_ui.append(user_msg)
 
     # Chạy tuần tự thay vì dùng ThreadPoolExecutor để tránh rủi ro race condition
     # (Streamlit session_state không an toàn khi đọc từ nhiều thread)
@@ -241,8 +255,13 @@ def handle_answer_question_multi(question):
         "rag": rag_message,
         "graph": graph_message,
         "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+        "content": f"RAG: {rag_message['content']}\n\nGraph: {graph_message['content']}",
+        "response": f"RAG: {rag_message['content']}\n\nGraph: {graph_message['content']}",
+        "sources": rag_message.get("sources", []),
+        "keywords": rag_message.get("keywords", [])
     }
     st.session_state.chat_history_ui.append(dual_message)
+    save_messages(st.session_state.session_id, dual_message)
 
     return {"RAG": rag_message, "Graph RAG": graph_message}
 

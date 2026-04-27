@@ -35,21 +35,25 @@ def render_chat_history():
     # Nếu có lịch sử hội thoại
     else:
         for i, msg in enumerate(st.session_state.chat_history_ui):
+            ts = msg.get("timestamp") or ""
             # UI cho user
             if msg["role"] == "user":
                 with st.chat_message("user", avatar="👤"):
                     st.markdown(msg["content"])
-                    st.caption(f"⏰ {msg['timestamp']}", unsafe_allow_html=False)
+                    if ts:
+                        st.caption(f"⏰ {ts}", unsafe_allow_html=False)
             # UI cho AI
             else:
-                if msg.get("dual"):
+                # Dual message: chỉ render 2 cột khi message thực sự là dual (không phụ thuộc rag_mode hiện tại)
+                is_dual = bool(msg.get("dual")) or ("rag" in msg and "graph" in msg)
+                if is_dual:
                     # Hiển thị dual responses với 2 cột
                     left_col, right_col = st.columns(2)
                     with left_col:
                         st.markdown("### RAG")
                         rag_msg = msg.get("rag", {})
                         st.write(rag_msg.get("content", ""))
-                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {rag_msg.get('response_time', 0)}s")
+                        st.caption(f"⏰ {ts} • ⚡ {rag_msg.get('response_time', 0)}s")
                         # Sources cho RAG
                         _hist_sources_rag = rag_msg.get('sources', [])
                         _hist_keywords_rag = rag_msg.get('keywords', [])
@@ -59,12 +63,12 @@ def render_chat_history():
                         st.markdown("### Graph RAG")
                         graph_msg = msg.get("graph", {})
                         st.write(graph_msg.get("content", ""))
-                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {graph_msg.get('response_time', 0)}s")
+                        st.caption(f"⏰ {ts} • ⚡ {graph_msg.get('response_time', 0)}s")
                 else:
                     with st.chat_message("assistant", avatar="🤖"):
                         st.markdown(msg.get("content", ""))
                         response_time = msg.get('response_time', 0)
-                        st.caption(f"⏰ {msg['timestamp']} • ⚡ {response_time}s")
+                        st.caption(f"⏰ {ts} • ⚡ {response_time}s")
                         # ── Citation tracking: hiển thị lại sources trong history (chỉ cho RAG, không cho Graph RAG) ──
                         _hist_sources   = msg.get('sources', [])
                         _hist_keywords  = msg.get('keywords', [])

@@ -1,16 +1,44 @@
 import streamlit as st
 import pandas as pd
+import datetime
 
 from ..advanced.qa_multi_document import answer_question
 from ..advanced.benchmark_retrievers import benchmark_retriever
 from ..core.filtering import filter_documents
+from src.presistance.history_manager import save_messages
 
 def render_multi_document_chat():
-  if not st.session_state.get("documents"):
-    st.info("Hãy upload tài liệu để bắt đầu chat")
-    return
   st.divider()
   st.subheader("Chat với tài liệu")
+
+  # ===== 1) LUÔN HIỂN THỊ LỊCH SỬ (theo sid) =====
+  history = st.session_state.get("chat_history_ui") or []
+  with st.expander(f"💬 Lịch sử hội thoại ({len(history)} messages)", expanded=True):
+    if not history:
+      st.info("Chưa có cuộc hội thoại cho sid này.")
+    else:
+      for msg in history:
+        role = msg.get("role", "ai")
+        ts = msg.get("timestamp") or ""
+        if role == "user":
+          with st.chat_message("user"):
+            st.markdown(msg.get("content", ""))
+            if ts:
+              st.caption(f"⏰ {ts}")
+        else:
+          with st.chat_message("assistant"):
+            st.markdown(msg.get("content", ""))
+            rt = msg.get("response_time")
+            if ts and rt is not None:
+              st.caption(f"⏰ {ts} • ⚡ {rt}s")
+            elif ts:
+              st.caption(f"⏰ {ts}")
+
+  # Nếu chưa upload docs thì chỉ hiển thị history, không cho hỏi tiếp
+  has_docs = bool(st.session_state.get("documents"))
+  if not has_docs:
+    st.info("Bạn đã có lịch sử theo sid, nhưng để hỏi tiếp bạn cần upload và xử lý tài liệu.")
+    return
   
   question = st.text_area("Nhập câu hỏi:", placeholder="Ví dụ: Tài liệu này nói về gì?", height=100, label_visibility="collapsed")
 
@@ -68,6 +96,23 @@ def render_multi_document_chat():
       return
     with st.spinner("Đang xử lý..."):
       try:
+        # Lưu message user vào session + DB trước
+        user_msg = {
+          "role": "user",
+          "content": question.strip(),
+          "response": "",
+          "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+          "response_time": None,
+          "sources": [],
+          "keywords": [],
+          "mode": "multi-doc",
+        }
+        st.session_state.chat_history_ui.append(user_msg)
+        try:
+          save_messages(st.session_state.session_id, user_msg)
+        except Exception:
+          pass
+
         # Lọc documents theo metadata trước
         filtered_docs = filter_documents(
           st.session_state.documents,
@@ -89,6 +134,25 @@ def render_multi_document_chat():
           )
           st.session_state.latest_benchmark_result = results[0] if results else None
           st.session_state.lastest_answer_result = None
+
+          # Lưu một message assistant tóm tắt benchmark vào DB để reload vẫn thấy
+          bench = st.session_state.latest_benchmark_result
+          if bench:
+            ai_msg = {
+              "role": "ai",
+              "content": f"[Benchmark]\n\nVector:\n{bench.get('pure_answer','')}\n\nHybrid:\n{bench.get('hybrid_answer','')}",
+              "response": "",
+              "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+              "response_time": bench.get("hybrid_total_time"),
+              "sources": [],
+              "keywords": [],
+              "mode": "benchmark",
+            }
+            st.session_state.chat_history_ui.append(ai_msg)
+            try:
+              save_messages(st.session_state.session_id, ai_msg)
+            except Exception:
+              pass
         else:
           # Chạy theo mode được chọn
           selected_mode = "vector" if mode == "Vector" else "hybrid"
@@ -101,6 +165,32 @@ def render_multi_document_chat():
           )
           st.session_state.lastest_answer_result = result
           st.session_state.latest_benchmark_result = None
+
+          # Lưu assistant answer vào session + DB
+          ai_msg = {
+            "role": "ai",
+            "content": result.get("answer", ""),
+            "response": result.get("answer", ""),
+            "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+            "response_time": None,
+            # Lưu sources/keywords nếu bạn muốn show lại trong history sau này
+            "sources": [
+              {
+                "page": d.metadata.get("page", 0),
+                "chunk_index": d.metadata.get("chunk_index", "—"),
+                "content": d.page_content,
+                "source": d.metadata.get("source"),
+              }
+              for d in (result.get("docs") or [])
+            ],
+            "keywords": [],
+            "mode": selected_mode,
+          }
+          st.session_state.chat_history_ui.append(ai_msg)
+          try:
+            save_messages(st.session_state.session_id, ai_msg)
+          except Exception:
+            pass
       except Exception as e:
         st.error(f"Lỗi khi xử lý câu hỏi: {e}")
         return

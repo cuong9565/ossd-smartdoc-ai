@@ -1,4 +1,8 @@
 import streamlit as st
+import os
+import shutil
+
+from src.presistance.history_manager import clear_chat_history, clear_document_state, clear_retriever_state
 
 def render_sidebar():
     with st.sidebar:
@@ -45,16 +49,41 @@ def render_sidebar():
             with col1:
                 if st.button("🔄 Clear Chat", use_container_width=True):
                     st.session_state.chat_history_ui = []
+                    # Xoá luôn trong DB để refresh không load lại
+                    try:
+                        clear_chat_history(st.session_state.session_id)
+                    except Exception:
+                        pass
                     st.toast("✓ Chat cleared")
                     st.rerun()
             with col2:
                 if st.button("🗑️ Clear All", use_container_width=True):
+                    # Clear DB trước (chat + retriever config + document metadata)
+                    try:
+                        clear_chat_history(st.session_state.session_id)
+                        clear_retriever_state(st.session_state.session_id)
+                        clear_document_state(st.session_state.session_id)
+                    except Exception:
+                        pass
+
+                    # Xoá vectorstore trên disk theo sid (nếu có) để reload không tự bật RAG mode
+                    try:
+                        vector_dir = os.path.join("vectorstores", st.session_state.session_id)
+                        if os.path.exists(vector_dir):
+                            shutil.rmtree(vector_dir)
+                    except Exception:
+                        pass
+
                     st.session_state.retriever = None
                     st.session_state.vector_db = None
                     st.session_state.uploaded_file_name = None
+                    st.session_state.documents = []
+                    st.session_state.document_meta = None
                     st.session_state.chat_history_ui = []
                     st.session_state.graph_triples = []
                     st.session_state.last_dual_responses = None
+                    st.session_state.retrieval_k = 4
+                    st.session_state.is_processing = False
                     st.session_state.rag_mode = {
                         "name": None,
                         "step": []

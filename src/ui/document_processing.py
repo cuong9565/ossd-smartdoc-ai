@@ -5,7 +5,7 @@ import time
 from src.core.metadata import extract_document_profile
 from ..core import chunk_file, embedding
 from ..advanced import load_file, extract_triples, build_graph, save_graph
-
+from src.presistance.history_manager import save_document_state_full, save_retriever_state
 def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, rag_mode):
     if uploaded_file and st.session_state.rag_mode["name"] is None:
         file_size_mb = uploaded_file.size / (1024 * 1024)
@@ -27,37 +27,59 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
         st.session_state.rag_mode["step"] = []
         st.session_state.uploaded_file_name = uploaded_file.name
         st.session_state.graph_triples = []
+        st.session_state.documents = []
+        st.session_state.document_meta = None
+        st.session_state.is_processing = True
+        
         try:
             with st.status("🔄 Đang xử lý tài liệu...", expanded=True):
                 if rag_mode == "RAG":
-
-                    docs = _do_step_load_file(stepcurr=1, numstep=4, temp_path=temp_path, suffix=suffix)
-                    documents = _do_step_chunk_file(stepcurr=2, numstep=4, chunk_size=chunk_size,
-                                                    chunk_overlap=chunk_overlap, docs=docs)
-                    profile = _do_step_extract_profile(stepcurr=3, numstep=4, documents=documents)
-
-                    _ = _do_step_embedding(stepcurr=4, numstep=4, documents=documents, retrieval_k=retrieval_k)
-
+                    docs =      _do_step_load_file(      stepcurr=1, numstep=3, temp_path=temp_path, suffix=suffix)
+                    documents = _do_step_chunk_file(     stepcurr=2, numstep=3, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
+                    _ =         _do_step_embedding(      stepcurr=3, numstep=3, documents=documents, retrieval_k=retrieval_k)
+                    st.session_state.documents = documents
                 elif rag_mode == "Graph RAG":
-                    docs = _do_step_load_file(stepcurr=1, numstep=6, temp_path=temp_path, suffix=suffix)
-                    documents = _do_step_chunk_file(stepcurr=2, numstep=6, chunk_size=chunk_size,
-                                                    chunk_overlap=chunk_overlap, docs=docs)
-                    profile = _do_step_extract_profile(stepcurr=3, numstep=6, documents=documents)
-                    _ = _do_step_embedding(stepcurr=4, numstep=6, documents=documents, retrieval_k=retrieval_k)
-                    triples = _do_step_extract_triples(stepcurr=5, numstep=6, documents=documents)
-                    _ = _do_step_build_graph(stepcurr=6, numstep=6, triples=triples)
-
+                    docs =      _do_step_load_file(      stepcurr=1, numstep=5, temp_path=temp_path, suffix=suffix)
+                    documents = _do_step_chunk_file(     stepcurr=2, numstep=5, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
+                    _ =         _do_step_embedding(      stepcurr=3, numstep=5, documents=documents, retrieval_k=retrieval_k)
+                    triples =   _do_step_extract_triples(stepcurr=4, numstep=5, documents=documents)
+                    _ =         _do_step_build_graph(    stepcurr=5, numstep=5, triples=triples)
+                    st.session_state.documents = documents
                 else:
+                    docs =      _do_step_load_file(      stepcurr=1, numstep=5, temp_path=temp_path, suffix=suffix)
+                    documents = _do_step_chunk_file(     stepcurr=2, numstep=5, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
+                    _ =         _do_step_embedding(      stepcurr=3, numstep=5, documents=documents, retrieval_k=retrieval_k)
+                    triples =   _do_step_extract_triples(stepcurr=4, numstep=5, documents=documents)
+                    _ =         _do_step_build_graph(    stepcurr=5, numstep=5, triples=triples)
+                    st.session_state.documents = documents
 
-                    docs = _do_step_load_file(stepcurr=1, numstep=6, temp_path=temp_path, suffix=suffix)
-                    documents = _do_step_chunk_file(stepcurr=2, numstep=6, chunk_size=chunk_size,
-                                                    chunk_overlap=chunk_overlap, docs=docs)
-                    profile = _do_step_extract_profile(stepcurr=3, numstep=6, documents=documents)
-                    _ = _do_step_embedding(stepcurr=4, numstep=6, documents=documents, retrieval_k=retrieval_k)
-                    triples = _do_step_extract_triples(stepcurr=5, numstep=6, documents=documents)
-                    _ = _do_step_build_graph(stepcurr=6, numstep=6, triples=triples)
+                save_retriever_state(st.session_state.session_id, rag_mode, retrieval_k, chunk_size, chunk_overlap)
+                save_document_state_full(
+                    st.session_state.session_id,
+                    st.session_state.uploaded_file_name,
+                    rag_mode,
+                    chunk_size,
+                    chunk_overlap,
+                    retrieval_k,
+                    documents,
+                    st.session_state.rag_mode.get("step", []),
+                    st.session_state.get("graph_triples", []),
+                )
+                st.session_state.document_meta = {
+                    "session_id": st.session_state.session_id,
+                    "file_name": st.session_state.uploaded_file_name,
+                    "mode": rag_mode,
+                    "chunk_size": chunk_size,
+                    "chunk_overlap": chunk_overlap,
+                    "retrieval_k": retrieval_k,
+                    "documents": documents,
+                }
+                vector_dir = os.path.join("vectorstores", st.session_state.session_id)
+                os.makedirs(vector_dir, exist_ok=True)
+                st.session_state.vector_db.save_local(vector_dir)
 
         finally:
+            st.session_state.is_processing = False
             if temp_path and os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
@@ -75,9 +97,9 @@ def _do_step_load_file(stepcurr, numstep, temp_path, suffix):
 
 def _do_step_chunk_file(stepcurr, numstep, chunk_size, chunk_overlap, docs):
     step = st.empty()
-    step.write(f"✂️ Bước {stepcurr}/{numstep}: Chia nhỏ văn bản thành chunks...")
+    # step.write(f"✂️ Bước {stepcurr}/{numstep}: Chia nhỏ văn bản thành chunks...")
     elapsed, documents = chunk_file(chunk_size, chunk_overlap, docs)
-    step.success(f"✂️ Chunking {len(documents)} chunks trong {elapsed}s")
+    # step.success(f"✂️ Chunking {len(documents)} chunks trong {elapsed}s")
     st.session_state.rag_mode["step"].append(f"✂️ Chunking {len(documents)} chunks trong **{elapsed}s**")
     return documents
 

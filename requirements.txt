@@ -37,3 +37,6 @@ rank-bm25==0.2.2
 
 # Graph RAG
 pyvis
+
+#SQL
+sqlite3
