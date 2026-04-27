@@ -140,6 +140,9 @@ def clear_document_state(session_id: str) -> None:
 def save_document_state(session_id, file_name, mode, chunk_size, chunk_overlap, retrieval_k, documents):
     conn = getConnection()
     cur = conn.cursor()
+    # Multi-file: lưu danh sách tên file dưới dạng JSON string
+    if isinstance(file_name, (list, tuple)):
+        file_name = json.dumps(list(file_name), ensure_ascii=False)
     documents_json = json.dumps(_serialize_documents(documents), ensure_ascii=False)
     cur.execute(
       """
@@ -168,6 +171,9 @@ def save_document_state_full(session_id, file_name, mode, chunk_size, chunk_over
     """Lưu đầy đủ document state để refresh chỉ cần load DB là render đúng UI + tiếp tục chat."""
     conn = getConnection()
     cur = conn.cursor()
+    # Multi-file: lưu danh sách tên file dưới dạng JSON string
+    if isinstance(file_name, (list, tuple)):
+        file_name = json.dumps(list(file_name), ensure_ascii=False)
     documents_json = json.dumps(_serialize_documents(documents), ensure_ascii=False)
     steps_json = json.dumps(steps or [], ensure_ascii=False)
     graph_triples_json = json.dumps(graph_triples or [], ensure_ascii=False)
@@ -192,6 +198,13 @@ def load_document_state(session_id):
         return None
 
     document_row = dict(row)
+    # file_name có thể là JSON string (multi-file) hoặc string (single-file)
+    try:
+        if isinstance(document_row.get("file_name"), str) and document_row["file_name"].strip().startswith("["):
+            document_row["file_name"] = json.loads(document_row["file_name"])
+    except Exception:
+        # giữ nguyên nếu parse lỗi
+        pass
     documents_json = document_row.get("documents_json") or document_row.get("documents")
     document_row["documents"] = _deserialize_documents(documents_json)
     # steps + graph_triples: load JSON (fallback empty list)

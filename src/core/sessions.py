@@ -33,6 +33,10 @@ def init_sessions_state():
     if "hybrid_retriever" not in st.session_state:
         st.session_state.hybrid_retriever = None
 
+    # Toggle rerank (Cross-Encoder) for fair Vector/Hybrid comparison
+    if "use_rerank" not in st.session_state:
+        st.session_state.use_rerank = False
+
     # tên file đã upload
     if "uploaded_file_name" not in st.session_state:
         st.session_state.uploaded_file_name = None

@@ -8,10 +8,74 @@ from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_
 from ..advanced.benchmark_retrievers import benchmark_retriever
 
 from langchain_core.prompts import PromptTemplate
+from langchain.retrievers.document_compressors import CrossEncoderReranker
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+from langchain.retrievers import ContextualCompressionRetriever
+from src.advanced.hybrid_search import HybridRetriever
 
 from .config import Config
 from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_english_template, \
     rewrite_vietnamese_template
+
+
+def _get_vector_retriever(use_rerank: bool):
+    """Return Vector retriever, optionally wrapped with Cross-Encoder rerank."""
+    vector_db = st.session_state.get("vector_db")
+    if vector_db is None:
+        raise RuntimeError("Vector DB chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
+
+    k = int(st.session_state.get("retrieval_k") or 4)
+    total_chunks = len(st.session_state.get("documents") or [])
+    safe_k = min(total_chunks if total_chunks else k * 3, max(k * 3, k))
+    base_retriever = vector_db.as_retriever(search_type="similarity", search_kwargs={"k": safe_k})
+
+    if not use_rerank:
+        # return top-k later via base_retriever's k already; keep safe_k for better recall
+        return base_retriever
+
+    # cache compressor in session to avoid reloading model every question
+    cached = st.session_state.get("_vector_rerank_retriever")
+    cached_k = st.session_state.get("_vector_rerank_k")
+    if cached is not None and cached_k == k:
+        return cached
+
+    top_n = min(total_chunks if total_chunks else k, k)
+    model = HuggingFaceCrossEncoder(model_name="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+    compressor = CrossEncoderReranker(model=model, top_n=top_n)
+    rerank_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor,
+        base_retriever=base_retriever,
+    )
+    st.session_state["_vector_rerank_retriever"] = rerank_retriever
+    st.session_state["_vector_rerank_k"] = k
+    return rerank_retriever
+
+
+def _get_hybrid_retriever(use_rerank: bool):
+    """Return Hybrid retriever, rebuilding if rerank toggle changed."""
+    k = int(st.session_state.get("retrieval_k") or 4)
+    docs = st.session_state.get("documents") or []
+    if not docs:
+        raise RuntimeError("Documents chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
+
+    r = st.session_state.get("hybrid_retriever")
+    if r is not None and getattr(r, "use_rerank", None) == bool(use_rerank) and int(getattr(r, "top_k", k)) == k:
+        return r
+
+    # rebuild with proper toggle & wider candidate pools
+    r = HybridRetriever(
+        documents=docs,
+        embedder=Config.get_embedder(),
+        dense_k=max(30, k * 3),
+        sparse_k=max(30, k * 3),
+        rerank_k=max(30, k * 6),
+        top_k=k,
+        alpha=0.6,
+        use_rerank=bool(use_rerank),
+        reranker_model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    )
+    st.session_state.hybrid_retriever = r
+    return r
 
 
 def call_llm_to_rewrite(history_text: str, question: str) -> str:
@@ -143,14 +207,17 @@ def _build_message(question: str, mode: str = "RAG") -> dict:
         if st.session_state.rag_mode["name"] is None:
             raise RuntimeError("Retriever chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
 
-        # Sử dụng câu hỏi ĐÃ VIẾT LẠI để retrieve context chính xác hơn
-        relevant_docs = st.session_state.retriever.invoke(rewritten_question)
         # Choose Vector vs Hybrid retriever (default Vector)
         search_mode = (st.session_state.get("search_mode") or "Vector").lower()
-        if search_mode == "hybrid" and st.session_state.get("hybrid_retriever") is not None:
-            relevant_docs = st.session_state.hybrid_retriever.invoke(question)
+        use_rerank = bool(st.session_state.get("use_rerank"))
+        if search_mode == "hybrid":
+            active_retriever = _get_hybrid_retriever(use_rerank)
         else:
-            relevant_docs = st.session_state.retriever.invoke(question)
+            active_retriever = _get_vector_retriever(use_rerank)
+
+        # Retrieval dùng câu hỏi đã rewrite (tăng recall cho cả Vector/BM25),
+        # còn generation vẫn dùng câu hỏi gốc để giữ ý định giao tiếp.
+        relevant_docs = active_retriever.invoke(rewritten_question)
         context = "\n".join([doc.page_content for doc in relevant_docs])
 
     # Gọi LLM với câu hỏi GỐC (để giữ ý định giao tiếp tự nhiên) nhưng context lấy từ câu hỏi viết lại

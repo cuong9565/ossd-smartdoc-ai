@@ -125,6 +125,15 @@ def render_chat_input():
             horizontal=True,
         )
 
+        # Fairness toggle: apply Cross-Encoder rerank for both Vector/Hybrid
+        if "use_rerank" not in st.session_state:
+            st.session_state.use_rerank = False
+        st.checkbox(
+            "Bật Re-ranking (Cross-Encoder) để so sánh công bằng",
+            key="use_rerank",
+            value=st.session_state.use_rerank,
+        )
+
         # Benchmark option (Vector vs Hybrid)
         if "run_benchmark" not in st.session_state:
             st.session_state.run_benchmark = False

@@ -6,26 +6,32 @@ from src.core.metadata import extract_document_profile
 from ..core import chunk_file, embedding
 from ..advanced import load_file, extract_triples, build_graph, save_graph
 from src.presistance.history_manager import save_document_state_full, save_retriever_state
+from src.core.ingest import ingest_uploaded_files
+from src.advanced.hybrid_search import HybridRetriever
+from src.core.config import Config
+
+
+def _normalize_uploaded_files(uploaded_files):
+    if not uploaded_files:
+        return []
+    # streamlit.file_uploader(accept_multiple_files=True) trả về List[UploadedFile]
+    # nhưng đôi khi code cũ truyền vào 1 UploadedFile đơn lẻ
+    return uploaded_files if isinstance(uploaded_files, list) else [uploaded_files]
+
+
 def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, rag_mode):
-    if uploaded_file and st.session_state.rag_mode["name"] is None:
-        file_size_mb = uploaded_file.size / (1024 * 1024)
+    uploaded_files = _normalize_uploaded_files(uploaded_file)
+    if uploaded_files and st.session_state.rag_mode["name"] is None:
+        total_size_mb = sum([(f.size or 0) for f in uploaded_files]) / (1024 * 1024)
         
         # If size file > 100MB10
-        if file_size_mb > 100:
-            st.error(f"❌ File quá lớn ({file_size_mb:.2f}MB > 100MB)")
+        if total_size_mb > 100:
+            st.error(f"❌ Tổng dung lượng file quá lớn ({total_size_mb:.2f}MB > 100MB)")
             return
-        
-        # Check if suffix uploaded_file is pdf or word
-        suffix = ".pdf" if uploaded_file.type == "application/pdf" else ".docx"
-
-        # Save temporary file to memory
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(uploaded_file.getbuffer())
-            temp_path = tmp.name
 
         st.session_state.rag_mode["name"] = rag_mode
         st.session_state.rag_mode["step"] = []
-        st.session_state.uploaded_file_name = uploaded_file.name
+        st.session_state.uploaded_file_name = [f.name for f in uploaded_files]
         st.session_state.graph_triples = []
         st.session_state.documents = []
         st.session_state.document_meta = None
@@ -33,25 +39,41 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
         
         try:
             with st.status("🔄 Đang xử lý tài liệu...", expanded=True):
+                # Multi-file: ingest trực tiếp thành chunks + metadata
+                # (đảm bảo mỗi chunk có source/file_type/upload_date/doc_id/chunk_index)
+                documents = ingest_uploaded_files(uploaded_files, chunk_size, chunk_overlap)
+
                 if rag_mode == "RAG":
-                    docs =      _do_step_load_file(      stepcurr=1, numstep=3, temp_path=temp_path, suffix=suffix)
-                    documents = _do_step_chunk_file(     stepcurr=2, numstep=3, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
-                    _ =         _do_step_embedding(      stepcurr=3, numstep=3, documents=documents, retrieval_k=retrieval_k)
+                    _ = _do_step_embedding(stepcurr=1, numstep=1, documents=documents, retrieval_k=retrieval_k)
                     st.session_state.documents = documents
                 elif rag_mode == "Graph RAG":
-                    docs =      _do_step_load_file(      stepcurr=1, numstep=5, temp_path=temp_path, suffix=suffix)
-                    documents = _do_step_chunk_file(     stepcurr=2, numstep=5, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
-                    _ =         _do_step_embedding(      stepcurr=3, numstep=5, documents=documents, retrieval_k=retrieval_k)
-                    triples =   _do_step_extract_triples(stepcurr=4, numstep=5, documents=documents)
-                    _ =         _do_step_build_graph(    stepcurr=5, numstep=5, triples=triples)
+                    _ = _do_step_embedding(stepcurr=1, numstep=3, documents=documents, retrieval_k=retrieval_k)
+                    triples = _do_step_extract_triples(stepcurr=2, numstep=3, documents=documents)
+                    _ = _do_step_build_graph(stepcurr=3, numstep=3, triples=triples)
                     st.session_state.documents = documents
                 else:
-                    docs =      _do_step_load_file(      stepcurr=1, numstep=5, temp_path=temp_path, suffix=suffix)
-                    documents = _do_step_chunk_file(     stepcurr=2, numstep=5, chunk_size=chunk_size, chunk_overlap=chunk_overlap, docs=docs)
-                    _ =         _do_step_embedding(      stepcurr=3, numstep=5, documents=documents, retrieval_k=retrieval_k)
-                    triples =   _do_step_extract_triples(stepcurr=4, numstep=5, documents=documents)
-                    _ =         _do_step_build_graph(    stepcurr=5, numstep=5, triples=triples)
+                    _ = _do_step_embedding(stepcurr=1, numstep=3, documents=documents, retrieval_k=retrieval_k)
+                    triples = _do_step_extract_triples(stepcurr=2, numstep=3, documents=documents)
+                    _ = _do_step_build_graph(stepcurr=3, numstep=3, triples=triples)
                     st.session_state.documents = documents
+
+                # Build Hybrid retriever once (for chat "Hybrid" mode)
+                # Use wider candidate pools than top_k for better recall.
+                k = int(retrieval_k) if retrieval_k else 4
+                try:
+                    st.session_state.hybrid_retriever = HybridRetriever(
+                        documents=documents,
+                        embedder=Config.get_embedder(),
+                        dense_k=max(30, k * 3),
+                        sparse_k=max(30, k * 3),
+                        rerank_k=max(30, k * 6),
+                        top_k=k,
+                        alpha=0.6,
+                        use_rerank=False,
+                    )
+                except Exception:
+                    # Không để lỗi build hybrid làm hỏng flow ingest
+                    st.session_state.hybrid_retriever = None
 
                 save_retriever_state(st.session_state.session_id, rag_mode, retrieval_k, chunk_size, chunk_overlap)
                 save_document_state_full(
@@ -80,11 +102,6 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
 
         finally:
             st.session_state.is_processing = False
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
         st.rerun()
 
 def _do_step_load_file(stepcurr, numstep, temp_path, suffix):
