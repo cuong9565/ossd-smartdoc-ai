@@ -23,3 +23,11 @@ class Config:
     # Number closet chat: Biến lưu số lượng cuộc trò chuyện muốn dùng gần nhất ra làm ngữ cảnh
     # Lấy gấp đôi vì trong chat có 2 role là user và ai
     NUMBER_CLOSEST_CHAT = 3 * 2
+
+    @staticmethod
+    def get_embedder():
+        return Config.EMBEDDER
+
+    @staticmethod
+    def get_llm():
+        return Config.LLM

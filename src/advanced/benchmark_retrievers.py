@@ -54,6 +54,7 @@ def benchmark_retriever(questions, documents, retrieval_k):
     sparse_k = int(retrieval_k),
     top_k = int(retrieval_k),
     alpha = 0.6,
+    use_rerank=False,
   )
   
   results = []

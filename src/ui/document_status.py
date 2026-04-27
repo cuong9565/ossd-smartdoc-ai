@@ -10,7 +10,12 @@ def render_document_status_ui():
         mode_name = document_meta.get("mode") or st.session_state.rag_mode["name"]
 
         with st.expander(label="📂 Danh sách tài liệu", expanded=False):
-            st.success(document_meta.get("file_name") or st.session_state.uploaded_file_name or "None")
+            file_name = document_meta.get("file_name") or st.session_state.uploaded_file_name or "None"
+            # uploaded_file_name có thể là list khi multi-file
+            if isinstance(file_name, list):
+                st.success(", ".join(file_name))
+            else:
+                st.success(file_name)
             st.caption(f"📄 Số chunks: {len(documents)}")
 
         with st.expander(label="📄 Thông tin xử lý tài liệu", expanded=False):

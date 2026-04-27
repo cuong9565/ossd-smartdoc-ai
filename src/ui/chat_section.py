@@ -1,6 +1,9 @@
 import streamlit as st
 import re                                     # regular expressions (Biểu thức chính quy)
+import pandas as pd
+
 from ..core import handle_answer_question, handle_answer_question_multi
+from ..core.handle_answer_question import handle_benchmark_question
 
 def render_chat_section():
     if st.session_state.rag_mode["name"] is not None:
@@ -44,6 +47,38 @@ def render_chat_history():
                         st.caption(f"⏰ {ts}", unsafe_allow_html=False)
             # UI cho AI
             else:
+                # Benchmark message (persisted inside sources)
+                bench_row = None
+                for s in (msg.get("sources") or []):
+                    if isinstance(s, dict) and "benchmark" in s:
+                        bench_row = s.get("benchmark")
+                        break
+
+                if bench_row:
+                    with st.chat_message("assistant", avatar="🤖"):
+                        st.markdown("### Benchmark: Vector vs Hybrid")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("#### Vector Search")
+                            st.write(bench_row.get("pure_answer", ""))
+                            st.caption(f"Total: {bench_row.get('pure_total_time')}s")
+                        with col2:
+                            st.markdown("#### Hybrid Search")
+                            st.write(bench_row.get("hybrid_answer", ""))
+                            st.caption(f"Total: {bench_row.get('hybrid_total_time')}s")
+
+                        metrics_df = pd.DataFrame(
+                            {
+                                "Pipeline": ["Vector", "Hybrid"],
+                                "Retrieval Time (s)": [bench_row.get("pure_retrieval_time", 0), bench_row.get("hybrid_retrieval_time", 0)],
+                                "Generation Time (s)": [bench_row.get("pure_generation_time", 0), bench_row.get("hybrid_generation_time", 0)],
+                                "Total Time (s)": [bench_row.get("pure_total_time", 0), bench_row.get("hybrid_total_time", 0)],
+                            }
+                        ).set_index("Pipeline")
+                        st.bar_chart(metrics_df, use_container_width=True)
+                        st.caption(f"⏰ {ts}", unsafe_allow_html=False)
+                    continue
+
                 # Dual message: chỉ render 2 cột khi message thực sự là dual (không phụ thuộc rag_mode hiện tại)
                 is_dual = bool(msg.get("dual")) or ("rag" in msg and "graph" in msg)
                 if is_dual:
@@ -80,6 +115,25 @@ def render_chat_input():
         st.divider()
         st.subheader("❓ Đặt câu hỏi", divider=True)
         
+        # Option retrieval mode for RAG: Vector vs Hybrid
+        if "search_mode" not in st.session_state:
+            st.session_state.search_mode = "Vector"
+        st.radio(
+            "Chọn chế độ search",
+            ["Vector", "Hybrid"],
+            key="search_mode",
+            horizontal=True,
+        )
+
+        # Benchmark option (Vector vs Hybrid)
+        if "run_benchmark" not in st.session_state:
+            st.session_state.run_benchmark = False
+        st.checkbox(
+            "Chạy benchmark (so sánh Vector vs Hybrid)",
+            key="run_benchmark",
+            value=st.session_state.run_benchmark,
+        )
+
         with st.form(key="question_form", border=False):
             question = st.text_area(
                 "Nhập câu hỏi:",
@@ -110,7 +164,12 @@ def render_answer_question(question, submit_question):
                 if st.session_state.rag_mode["name"] == "RAG, Graph RAG":
                     handle_answer_question_multi(question)
                 else:
-                    handle_answer_question(question)
+                    # Benchmark overrides single answer
+                    if st.session_state.get("run_benchmark"):
+                        handle_benchmark_question(question)
+                    else:
+                        # Pass retrieval mode for RAG path (Vector/Hybrid)
+                        handle_answer_question(question, mode=st.session_state.rag_mode["name"])
 
                 st.rerun()
 

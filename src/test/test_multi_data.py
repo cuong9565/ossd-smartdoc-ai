@@ -108,7 +108,7 @@ def test_benchmark_retriever_returns_vector_and_hybrid_results(monkeypatch):
     )
   
     class FakeHybridRetriever:
-      def __init__(self, documents, embedder, dense_k=30, sparse_k=30, top_k=5, alpha=0.7):
+      def __init__(self, documents, embedder, dense_k=30, sparse_k=30, top_k=5, alpha=0.7, **kwargs):
         self.docs = documents
         self.top_k = top_k 
       

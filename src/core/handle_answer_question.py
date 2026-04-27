@@ -5,6 +5,7 @@ import re
 from src.presistance.history_manager import save_messages
 from .config import Config
 from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_english_template
+from ..advanced.benchmark_retrievers import benchmark_retriever
 
 from langchain_core.prompts import PromptTemplate
 
@@ -144,6 +145,12 @@ def _build_message(question: str, mode: str = "RAG") -> dict:
 
         # Sử dụng câu hỏi ĐÃ VIẾT LẠI để retrieve context chính xác hơn
         relevant_docs = st.session_state.retriever.invoke(rewritten_question)
+        # Choose Vector vs Hybrid retriever (default Vector)
+        search_mode = (st.session_state.get("search_mode") or "Vector").lower()
+        if search_mode == "hybrid" and st.session_state.get("hybrid_retriever") is not None:
+            relevant_docs = st.session_state.hybrid_retriever.invoke(question)
+        else:
+            relevant_docs = st.session_state.retriever.invoke(question)
         context = "\n".join([doc.page_content for doc in relevant_docs])
 
     # Gọi LLM với câu hỏi GỐC (để giữ ý định giao tiếp tự nhiên) nhưng context lấy từ câu hỏi viết lại
@@ -219,6 +226,53 @@ def handle_answer_question(question, mode=None):
     
     save_messages(st.session_state.session_id, answer_message)
     return answer_message
+
+
+def handle_benchmark_question(question: str):
+    """
+    Chạy benchmark so sánh Vector vs Hybrid cho 1 câu hỏi.
+    Lưu kết quả vào chat history và SQLite để refresh vẫn xem lại được.
+    """
+    user_msg = {
+        "role": "user",
+        "content": question,
+        "response": "",
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+        "sources": [],
+        "keywords": [],
+        "mode": "benchmark",
+    }
+    st.session_state.chat_history_ui.append(user_msg)
+    save_messages(st.session_state.session_id, user_msg)
+
+    docs = st.session_state.get("documents") or []
+    k = st.session_state.get("retrieval_k") or 4
+    results = benchmark_retriever(
+        questions=[question],
+        documents=docs,
+        retrieval_k=int(k),
+    )
+    row = results[0] if results else {}
+
+    content = (
+        "### Benchmark: Vector vs Hybrid\n\n"
+        f"**Vector** (total: {row.get('pure_total_time')}s)\n\n{row.get('pure_answer','')}\n\n"
+        f"**Hybrid** (total: {row.get('hybrid_total_time')}s)\n\n{row.get('hybrid_answer','')}"
+    )
+    ai_msg = {
+        "role": "ai",
+        "content": content,
+        "response": content,
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+        "response_time": row.get("hybrid_total_time"),
+        # Persist bench data inside sources so UI can render charts after reload
+        "sources": [{"benchmark": row}],
+        "keywords": [],
+        "mode": "benchmark",
+    }
+    st.session_state.chat_history_ui.append(ai_msg)
+    save_messages(st.session_state.session_id, ai_msg)
+    return row
 
 
 def handle_answer_question_multi(question):

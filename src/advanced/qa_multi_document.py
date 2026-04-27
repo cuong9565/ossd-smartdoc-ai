@@ -38,6 +38,8 @@ def answer_question(question, documents, k, filters=None, mode="hybrid"):
       sparse_k=k,
       top_k=k,
       alpha=0.6,
+      # Tránh tải reranker nặng mặc định; có thể bật lại nếu cần
+      use_rerank=False,
     )
 
   docs = retriever.invoke(question)

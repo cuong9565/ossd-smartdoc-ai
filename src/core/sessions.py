@@ -29,6 +29,10 @@ def init_sessions_state():
     if "vector_db" not in st.session_state:
         st.session_state.vector_db = None
 
+    # Hybrid retriever cache (optional)
+    if "hybrid_retriever" not in st.session_state:
+        st.session_state.hybrid_retriever = None
+
     # tên file đã upload
     if "uploaded_file_name" not in st.session_state:
         st.session_state.uploaded_file_name = None
@@ -44,7 +48,7 @@ def init_sessions_state():
 
     # Search mode cho multi-document UI (Vector/Hybrid)
     if "search_mode" not in st.session_state:
-        st.session_state.search_mode = "Hybrid"
+        st.session_state.search_mode = "Vector"
 
     if "document_meta" not in st.session_state:
         st.session_state.document_meta = None
@@ -93,19 +97,25 @@ def init_sessions_state():
         if saved_state:
             # DB đang lưu key là retriever_k (không phải retrieval_k)
             st.session_state.retrieval_k = saved_state.get("retriever_k") or 4
-            if saved_state.get("mode"):
-                # mode lưu DB dùng để set default cho UI multi-doc
-                st.session_state.search_mode = saved_state.get("mode")
+            saved_mode = saved_state.get("mode")
+
+            # Mode trong DB có 2 loại:
+            # - Rag mode: "RAG" | "Graph RAG" | "RAG, Graph RAG"
+            # - Search mode: "Vector" | "Hybrid"
+            # Tránh gán nhầm "RAG" vào search_mode (radio chỉ có Vector/Hybrid)
+            if saved_mode in {"Vector", "Hybrid"}:
+                st.session_state.search_mode = saved_mode
+
             # Nếu DB đã có mode RAG/GraphRAG thì restore luôn để UI không bắt upload lại
-            if st.session_state.rag_mode.get("name") is None and saved_state.get("mode") in {
+            if st.session_state.rag_mode.get("name") is None and saved_mode in {
                 "RAG",
                 "Graph RAG",
                 "RAG, Graph RAG",
             }:
-                st.session_state.rag_mode["name"] = saved_state.get("mode")
+                st.session_state.rag_mode["name"] = saved_mode
             # Lưu config retriever để UI hiển thị; retriever object sẽ được set sau (nếu có FAISS local)
             st.session_state.retriever = {
-                "mode": saved_state.get("mode"),
+                "mode": saved_mode,
                 "retriever_k": saved_state.get("retriever_k"),
                 "chunk_size": saved_state.get("chunk_size"),
                 "chunk_overlap": saved_state.get("chunk_overlap"),

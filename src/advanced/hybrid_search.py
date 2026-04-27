@@ -9,7 +9,19 @@ from sentence_transformers import CrossEncoder
 
 
 class HybridRetriever: 
-  def __init__(self, documents, embedder, dense_k = 30, sparse_k = 30, top_k = 5, alpha = 0.7, rerank_k = 30, max_rerank = 1200):
+  def __init__(
+    self,
+    documents,
+    embedder,
+    dense_k = 30,
+    sparse_k = 30,
+    top_k = 5,
+    alpha = 0.7,
+    rerank_k = 30,
+    max_rerank = 1200,
+    use_rerank: bool = False,
+    reranker_model: str = "BAAI/bge-reranker-v2-m3",
+  ):
     self.embedder = embedder
     self.vector_db = FAISS.from_documents(documents, embedder)
     self.dense_retriever = self.vector_db.as_retriever(search_type="similarity", search_kwargs={"k": dense_k})
@@ -20,13 +32,16 @@ class HybridRetriever:
     self.rerank_k = int(rerank_k)
     self.max_rerank = int(max_rerank)
     self.device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"[SmartDoc] HybridRetriever device: {self.device}")
-    self.reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", device=self.device)
+    self.use_rerank = bool(use_rerank)
+    self.reranker_model = reranker_model
+    self.reranker = None  # lazy init khi thật sự cần rerank
 
   def _doc_key(self, doc):
+    # Multi-doc: cần thêm source để tránh trùng (page, chunk_index) giữa nhiều file
+    source = doc.metadata.get("source")
     page = doc.metadata.get("page", -1)
     chunk_index = doc.metadata.get("chunk_index", -1) 
-    return (page, chunk_index)
+    return (source, page, chunk_index)
   
   def _content_key(self, text:str)->str:
     normalized = " ".join(text.lower().split())
@@ -59,11 +74,19 @@ class HybridRetriever:
     if not docs:
       return []
     docs = self._dedupe_docs(docs)
+
+    # Nếu không bật rerank, trả về top_k sau fusion/dedupe
+    if not self.use_rerank:
+      return docs[: self.top_k]
+
+    # Lazy init reranker để tránh tải model nặng khi không dùng
+    if self.reranker is None:
+      self.reranker = CrossEncoder(self.reranker_model, device=self.device)
+
     pairs = [(query, self._trim_text(doc.page_content)) for doc in docs]
-    print(f"[SmartDoc] Rerank candidates: {len(pairs)}")
     scores = self.reranker.predict(pairs)
     reranked = sorted(zip(scores, docs), key=lambda x: x[0], reverse=True)
-    return [doc for _, doc in reranked][:self.top_k]
+    return [doc for _, doc in reranked][: self.top_k]
   
   def invoke(self, query: str) -> list[Document]:
     dense_docs = self.dense_retriever.invoke(query)
@@ -85,5 +108,4 @@ class HybridRetriever:
     ordered_docs = [
       merged_docs[key] for key in sorted(merged_docs.keys(), key=lambda k: scores[k], reverse=True)
     ]
-    print(f"[SmartDoc] Fusion docs: {len(ordered_docs)} | Rerank limit: {self.rerank_k}")
     return self.rerank(query, ordered_docs[: self.rerank_k]) 

@@ -92,6 +92,7 @@ def test_rerank_sorts_by_score(monkeypatch):
         top_k = 3,
         rerank_k = 3,
         max_rerank = 8,
+        use_rerank=True,
     )
     retriever.reranker = fake_ranker
     docs = [
