@@ -3,8 +3,8 @@ import tempfile
 import os
 import time
 from src.core.metadata import extract_document_profile
-from ..core import chunk_file, embedding
-from ..advanced import load_file, extract_triples, build_graph, save_graph
+from ..core import embedding
+from ..advanced import extract_triples, build_graph, save_graph
 from src.presistance.history_manager import save_document_state_full, save_retriever_state
 from src.core.ingest import ingest_uploaded_files
 from src.advanced.hybrid_search import HybridRetriever
@@ -24,7 +24,7 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
     if uploaded_files and st.session_state.rag_mode["name"] is None:
         total_size_mb = sum([(f.size or 0) for f in uploaded_files]) / (1024 * 1024)
         
-        # If size file > 100MB10
+        # If size file > 100MB
         if total_size_mb > 100:
             st.error(f"❌ Tổng dung lượng file quá lớn ({total_size_mb:.2f}MB > 100MB)")
             return
@@ -41,20 +41,22 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
             with st.status("🔄 Đang xử lý tài liệu...", expanded=True):
                 # Multi-file: ingest trực tiếp thành chunks + metadata
                 # (đảm bảo mỗi chunk có source/file_type/upload_date/doc_id/chunk_index)
-                documents = ingest_uploaded_files(uploaded_files, chunk_size, chunk_overlap)
 
                 if rag_mode == "RAG":
-                    _ = _do_step_embedding(stepcurr=1, numstep=1, documents=documents, retrieval_k=retrieval_k)
+                    documents = ingest_uploaded_files(1, 2, uploaded_files, chunk_size, chunk_overlap)
+                    _ = _do_step_embedding(2, 2, documents, retrieval_k)
                     st.session_state.documents = documents
                 elif rag_mode == "Graph RAG":
-                    _ = _do_step_embedding(stepcurr=1, numstep=3, documents=documents, retrieval_k=retrieval_k)
-                    triples = _do_step_extract_triples(stepcurr=2, numstep=3, documents=documents)
-                    _ = _do_step_build_graph(stepcurr=3, numstep=3, triples=triples)
+                    documents = ingest_uploaded_files(1, 4, uploaded_files, chunk_size, chunk_overlap)
+                    _ = _do_step_embedding(2, 4, documents, retrieval_k)
+                    triples = _do_step_extract_triples(3, 4, documents)
+                    _ = _do_step_build_graph(4, 4, triples)
                     st.session_state.documents = documents
                 else:
-                    _ = _do_step_embedding(stepcurr=1, numstep=3, documents=documents, retrieval_k=retrieval_k)
-                    triples = _do_step_extract_triples(stepcurr=2, numstep=3, documents=documents)
-                    _ = _do_step_build_graph(stepcurr=3, numstep=3, triples=triples)
+                    documents = ingest_uploaded_files(1, 4, uploaded_files, chunk_size, chunk_overlap)
+                    _ = _do_step_embedding(2, 4, documents, retrieval_k)
+                    triples = _do_step_extract_triples(3, 4, documents)
+                    _ = _do_step_build_graph(4, 4, triples)
                     st.session_state.documents = documents
 
                 # Build Hybrid retriever once (for chat "Hybrid" mode)
@@ -103,22 +105,6 @@ def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, r
         finally:
             st.session_state.is_processing = False
         st.rerun()
-
-def _do_step_load_file(stepcurr, numstep, temp_path, suffix):
-    step = st.empty()
-    step.write(f"📖 Bước {stepcurr}/{numstep}: Trích xuất văn bản...")
-    elapsed, docs = load_file(temp_path, suffix)
-    step.success(f"📖 Trích xuất {len(docs)} trang trong {elapsed}s")
-    st.session_state.rag_mode["step"].append(f"📖 Trích xuất {len(docs)} trang trong **{elapsed}s**")
-    return docs
-
-def _do_step_chunk_file(stepcurr, numstep, chunk_size, chunk_overlap, docs):
-    step = st.empty()
-    # step.write(f"✂️ Bước {stepcurr}/{numstep}: Chia nhỏ văn bản thành chunks...")
-    elapsed, documents = chunk_file(chunk_size, chunk_overlap, docs)
-    # step.success(f"✂️ Chunking {len(documents)} chunks trong {elapsed}s")
-    st.session_state.rag_mode["step"].append(f"✂️ Chunking {len(documents)} chunks trong **{elapsed}s**")
-    return documents
 
 def _do_step_embedding(stepcurr, numstep, documents, retrieval_k):
     step = st.empty()

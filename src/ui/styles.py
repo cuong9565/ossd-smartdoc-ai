@@ -303,6 +303,18 @@ def load_css():
                 flex-wrap: wrap;
             }
 
+            .file-badge {
+                display: inline-flex;
+                align-items: center;
+                background: linear-gradient(135deg, #ff9a00 0%, #ff6a00 100%);
+                color: white;
+                padding: 3px 10px;
+                border-radius: 12px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.3px;
+            }
+
             .page-badge {
                 display: inline-flex;
                 align-items: center;
