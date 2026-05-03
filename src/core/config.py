@@ -14,7 +14,7 @@ class Config:
 
     # LLM
     LLM = OllamaLLM(
-        model="qwen2.5:7b",
+        model="qwen2.5:3b",
         temperature=0.7,
         top_p=0.9,
         repeat_penalty=1.1,

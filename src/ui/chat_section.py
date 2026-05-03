@@ -207,14 +207,19 @@ def render_sources_ui(sources: list, keywords: list):
         for i, src in enumerate(sources, 1):
             page_num   = src.get('page', 0) + 1            # Số trang
             chunk_idx  = src.get('chunk_index', '—')       # Chunk thứ mấy trong trang
+            file_name  = src.get('source', 'Unknown')      # Tên file
             content    = src.get('content', '')            # Văn bản
             char_count = len(content)                      # Số lượng từ trong văn bản
             body       = highlight_text(content, keywords) 
             st.markdown(f"""
             <div class="source-card-enhanced">
                 <div class="source-header">
-                    <span class="source-title">📌 Nguồn {i}</span>
+                    <div style="display: flex; flex-direction: column;">
+                        <span class="source-title">📌 Nguồn {i}</span>
+                        <span style="font-size: 0.8rem; color: #666; font-style: italic;">📁 {file_name}</span>
+                    </div>
                     <div class="source-badges">
+                        <span class="file-badge">📁 File&nbsp;{file_name}</span>
                         <span class="page-badge">📄 Trang&nbsp;{page_num}</span>
                         <span class="chunk-badge">🧩 Chunk&nbsp;{chunk_idx}</span>
                         <span class="len-badge">📏 {char_count}&nbsp;ký&nbsp;tự</span>
