@@ -69,7 +69,7 @@ def render_chat_history():
 
                         metrics_df = pd.DataFrame(
                             {
-                                "Pipeline": ["Vector", "Hybrid"],
+                                "Pipeline": ["A Vector", "B Hybrid"],
                                 "Retrieval Time (s)": [bench_row.get("pure_retrieval_time", 0), bench_row.get("hybrid_retrieval_time", 0)],
                                 "Generation Time (s)": [bench_row.get("pure_generation_time", 0), bench_row.get("hybrid_generation_time", 0)],
                                 "Total Time (s)": [bench_row.get("pure_total_time", 0), bench_row.get("hybrid_total_time", 0)],

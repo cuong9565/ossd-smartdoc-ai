@@ -203,11 +203,10 @@ def load_document_state(session_id):
         if isinstance(document_row.get("file_name"), str) and document_row["file_name"].strip().startswith("["):
             document_row["file_name"] = json.loads(document_row["file_name"])
     except Exception:
-        # giữ nguyên nếu parse lỗi
         pass
     documents_json = document_row.get("documents_json") or document_row.get("documents")
     document_row["documents"] = _deserialize_documents(documents_json)
-    # steps + graph_triples: load JSON (fallback empty list)
+   
     try:
         document_row["steps"] = json.loads(document_row.get("steps_json") or "[]")
     except json.JSONDecodeError:

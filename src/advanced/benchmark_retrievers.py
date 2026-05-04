@@ -56,6 +56,12 @@ def benchmark_retriever(questions, documents, retrieval_k):
     alpha = 0.6,
     use_rerank=False,
   )
+
+  # Warm-up to reduce first-run bias in timing
+  if questions:
+    warmup_question = questions[0]
+    _run_pipeline(pure_retriever, warmup_question)
+    _run_pipeline(hybrid_retriever, warmup_question)
   
   results = []
   for question in questions:

@@ -65,21 +65,21 @@ def render_benchmark_section():
 
       retrieval_df = pd.DataFrame(
         {
-          "Pipeline": ["Vector", "Hybrid"],
+          "Pipeline": ["A Vector", "B Hybrid"],
           "Retrieval Time (s)": [benchmark_row["pure_retrieval_time"], benchmark_row["hybrid_retrieval_time"]],
         }
       ).set_index("Pipeline")
 
       generation_df = pd.DataFrame(
         {
-          "Pipeline": ["Vector", "Hybrid"],
+          "Pipeline": ["A Vector", "B Hybrid"],
           "Generation Time (s)": [benchmark_row["pure_generation_time"], benchmark_row["hybrid_generation_time"]],
         }
       ).set_index("Pipeline")
 
       total_df = pd.DataFrame(
         {
-          "Pipeline": ["Vector", "Hybrid"],
+          "Pipeline": ["A Vector", "B Hybrid"],
           "Total Time (s)": [benchmark_row["pure_total_time"], benchmark_row["hybrid_total_time"]],
         }
       ).set_index("Pipeline")
