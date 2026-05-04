@@ -33,20 +33,23 @@ def document_processing(uploaded_files, chunk_size, chunk_overlap, retrieval_k, 
         try:
             with st.status("🔄 Đang xử lý tài liệu...", expanded=True):
                 if rag_mode == "RAG":
-                    documents = ingest_uploaded_files(1, 2, uploaded_files, chunk_size, chunk_overlap)
-                    _ =         _do_step_embedding(2, 2, documents, retrieval_k)
+                    documents = ingest_uploaded_files(1, 3, uploaded_files, chunk_size, chunk_overlap)
+                    profile = _do_step_extract_profile(2, 3, documents)
+                    _ =         _do_step_embedding(3, 3, documents, retrieval_k)
 
                 elif rag_mode == "Graph RAG":
-                    documents = ingest_uploaded_files(1, 4, uploaded_files, chunk_size, chunk_overlap)
-                    _ =         _do_step_embedding(2, 4, documents, retrieval_k)
-                    triples =   _do_step_extract_triples(3, 4, documents)
-                    _ =         _do_step_build_graph(4, 4, triples)
+                    documents = ingest_uploaded_files(1, 5, uploaded_files, chunk_size, chunk_overlap)
+                    profile = _do_step_extract_profile(2, 5, documents)
+                    _ =         _do_step_embedding(3, 5, documents, retrieval_k)
+                    triples =   _do_step_extract_triples(4, 5, documents)
+                    _ =         _do_step_build_graph(5, 5, triples)
 
                 else:
-                    documents = ingest_uploaded_files(1, 4, uploaded_files, chunk_size, chunk_overlap)
-                    _ =         _do_step_embedding(2, 4, documents, retrieval_k)
-                    triples =   _do_step_extract_triples(3, 4, documents)
-                    _ =         _do_step_build_graph(4, 4, triples)
+                    documents = ingest_uploaded_files(1, 5, uploaded_files, chunk_size, chunk_overlap)
+                    profile = _do_step_extract_profile(2, 5,documents)
+                    _ =         _do_step_embedding(3, 5, documents, retrieval_k)
+                    triples =   _do_step_extract_triples(4, 5, documents)
+                    _ =         _do_step_build_graph(5, 5, triples)
 
                 _build_hybird_retriever(retrieval_k)
                 _do_step_save_database(rag_mode, retrieval_k, chunk_size, chunk_overlap, documents)
@@ -60,8 +63,6 @@ def _do_step_embedding(stepcurr, numstep, documents, retrieval_k):
     elapsed, vector_db, retriever = embedding(documents, retrieval_k)
     step.success(f"🔢 Embedding {vector_db.index.ntotal} vector, {vector_db.index.d} chiều trong **{elapsed}s**")
     st.session_state.rag_mode["step"].append(f"🔢 Embedding {vector_db.index.ntotal} vector, {vector_db.index.d} chiều trong **{elapsed}s**")
-    st.session_state.vector_db = vector_db
-    st.session_state.retriever = retriever
     return None
 
 def _do_step_extract_triples(stepcurr, numstep, documents):
@@ -105,7 +106,20 @@ def _build_hybird_retriever(retrieval_k):
         # Không để lỗi build hybrid làm hỏng flow ingest
         st.session_state.hybrid_retriever = None
     step_build_hybird.success(f"**Xây dựng Hybrid retriever thành công**")
+def _do_step_extract_profile(stepcurr, numstep, documents):
+    start_time = time.time()
 
+    # Lấy profile và lưu vào session_state
+    profile = extract_document_profile(documents)
+    st.session_state.document_profile = profile
+
+    elapsed = round(time.time() - start_time, 2)
+
+    # Hiển thị log trên UI giống các bước khác
+    st.write(f"📄 Bước {stepcurr}/{numstep}: Nhận diện tài liệu... ({elapsed}s)")
+    st.info(f"Lĩnh vực nhận diện: {profile}")  # In ra để người dùng thấy
+
+    return profile
 def _do_step_save_database(rag_mode, retrieval_k, chunk_size, chunk_overlap, documents):
     """
     Lưu trạng thái retriever và document vào database

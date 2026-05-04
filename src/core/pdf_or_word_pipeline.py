@@ -80,6 +80,9 @@ def embedding(documents, retrieval_k):
     st.session_state.vector_db = vector_db
 
     # Save retriever to session
-    st.session_state.retriever = compression_retriever
+    st.session_state.retriever = vector_db.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": retrieval_k}
+    )
 
     return elapsed, vector_db, compression_retriever

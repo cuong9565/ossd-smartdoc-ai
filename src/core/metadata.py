@@ -18,7 +18,7 @@ from src.core.config import Config
 
 
 def extract_document_profile(documents) -> str:
-  # Lấy nội dung của tối đa 20 chunk/trang đầu tiên
+  # Lấy nội dung của tối đa 15 chunk/trang đầu tiên
   sample_text = "\n".join([doc.page_content for doc in documents[:15]])
 
   template = get_file_context_template()

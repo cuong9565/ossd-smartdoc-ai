@@ -22,30 +22,14 @@ def get_file_context_template():
 
     Hồ sơ tài liệu:
     """
-def rewrite_vietnamese_template(history,question):
-    return f"""Bạn là một chuyên gia tối ưu hóa tìm kiếm thông tin.
-    Nhiệm vụ:
-    - Dựa vào ngữ cảnh trò chuyện, viết lại câu hỏi cuối cùng của người dùng để làm rõ mọi đại từ (nó, phương pháp này, thuật toán đó...) thành các danh từ/thuật ngữ cụ thể.
-    - Nếu câu hỏi đã rõ ràng và không phụ thuộc vào lịch sử, hãy giữ nguyên hoặc tối ưu thêm từ khóa.
-    - Làm rõ nghĩa các từ viết tắt nếu có thể đoán được ngữ cảnh
-    - Sử dụng thông tin từ "Lịch sử Chat" để viết lại "Câu hỏi ban đầu" nếu thấy thông tin từ L
-    - Bổ sung các từ khóa đồng nghĩa quan trọng
-    - KHÔNG trả lời câu hỏi
-    - Chỉ in ra câu hỏi được viết lại, tuyệt đổi không giải thích hay thêm văn bản phụ
-    
-    Câu hỏi ban đầu: {question}
-    Lịch sử trò chuyện gần đây: {history}
-    Câu hỏi tối ưu:
-    """
+
 def rewrite_vietnamese_template():
-    """
-    Trả về chuỗi template thô với các placeholder để LangChain tự điền dữ liệu.
-    """
     return """Bạn là một chuyên gia tối ưu hóa tìm kiếm thông tin.
     Tài liệu hiện tại hệ thống đang sử dụng có thông tin hồ sơ như sau:
     {profile}
 
     Nhiệm vụ:
+    
     - Dựa vào hồ sơ tài liệu và ngữ cảnh trò chuyện, viết lại câu hỏi của người dùng để làm rõ mọi đại từ (nó, phương pháp này, thuật toán đó...) thành các danh từ/thuật ngữ cụ thể.
     - Nếu câu hỏi dùng từ lóng hoặc từ viết tắt, hãy dịch/làm rõ chúng sang thuật ngữ chuyên môn thuộc lĩnh vực của tài liệu (Ví dụ: "QHD" -> "Quy hoạch động").
     - Tuyệt đối không tự ý suy diễn sang các lĩnh vực không liên quan đến hồ sơ tài liệu đã cho.
@@ -55,8 +39,8 @@ def rewrite_vietnamese_template():
     Lịch sử trò chuyện gần đây:
     {history}
 
-Câu hỏi ban đầu: {question}
-Câu hỏi tối ưu:"""
+    Câu hỏi ban đầu: {question}
+    Câu hỏi tối ưu:"""
 def get_vietnamese_template(history_text, context, question):
     return f"""Bạn là một AI trợ lý thông minh, chuyên trả lời câu hỏi dựa trên tài liệu.
         Nhiệm vụ:
