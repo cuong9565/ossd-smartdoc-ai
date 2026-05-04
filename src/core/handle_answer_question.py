@@ -6,6 +6,7 @@ from src.presistance.history_manager import save_messages
 from .config import Config
 from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_english_template
 from ..advanced.benchmark_retrievers import benchmark_retriever
+from .filtering import filter_documents
 
 from langchain_core.prompts import PromptTemplate
 from langchain.retrievers.document_compressors import CrossEncoderReranker
@@ -18,7 +19,7 @@ from .prompt_template import detect_is_vietnamese, get_vietnamese_template, get_
     rewrite_vietnamese_template
 
 
-def _get_vector_retriever(use_rerank: bool):
+def _get_vector_retriever(use_rerank: bool, filters: dict = None):
     """Return Vector retriever, optionally wrapped with Cross-Encoder rerank."""
     vector_db = st.session_state.get("vector_db")
     if vector_db is None:
@@ -27,40 +28,59 @@ def _get_vector_retriever(use_rerank: bool):
     k = int(st.session_state.get("retrieval_k") or 4)
     total_chunks = len(st.session_state.get("documents") or [])
     safe_k = min(total_chunks if total_chunks else k * 3, max(k * 3, k))
-    base_retriever = vector_db.as_retriever(search_type="similarity", search_kwargs={"k": safe_k})
+    
+    search_kwargs = {"k": safe_k}
+    if filters:
+        actual_filters = {k: v for k, v in filters.items() if v}
+        if actual_filters:
+            search_kwargs["filter"] = lambda metadata: all(metadata.get(key) == val for key, val in actual_filters.items())
+
+    base_retriever = vector_db.as_retriever(search_type="similarity", search_kwargs=search_kwargs)
 
     if not use_rerank:
         # return top-k later via base_retriever's k already; keep safe_k for better recall
         return base_retriever
 
-    # cache compressor in session to avoid reloading model every question
-    cached = st.session_state.get("_vector_rerank_retriever")
-    cached_k = st.session_state.get("_vector_rerank_k")
-    if cached is not None and cached_k == k:
-        return cached
-
     top_n = min(total_chunks if total_chunks else k, k)
-    model = HuggingFaceCrossEncoder(model_name="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+    
+    # Cache model to avoid reloading weights every time
+    model = st.session_state.get("_cross_encoder_model")
+    if model is None:
+        model = HuggingFaceCrossEncoder(model_name="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+        st.session_state["_cross_encoder_model"] = model
+        
     compressor = CrossEncoderReranker(model=model, top_n=top_n)
     rerank_retriever = ContextualCompressionRetriever(
         base_compressor=compressor,
         base_retriever=base_retriever,
     )
-    st.session_state["_vector_rerank_retriever"] = rerank_retriever
-    st.session_state["_vector_rerank_k"] = k
     return rerank_retriever
 
 
-def _get_hybrid_retriever(use_rerank: bool):
-    """Return Hybrid retriever, rebuilding if rerank toggle changed."""
+def _get_hybrid_retriever(use_rerank: bool, filters: dict = None):
+    """Return Hybrid retriever, rebuilding if rerank toggle changed or filters applied."""
     k = int(st.session_state.get("retrieval_k") or 4)
     docs = st.session_state.get("documents") or []
     if not docs:
         raise RuntimeError("Documents chưa sẵn sàng. Vui lòng xử lý tài liệu trước.")
 
-    r = st.session_state.get("hybrid_retriever")
-    if r is not None and getattr(r, "use_rerank", None) == bool(use_rerank) and int(getattr(r, "top_k", k)) == k:
-        return r
+    actual_filters = {k: v for k, v in filters.items() if v} if filters else {}
+    
+    if actual_filters:
+        from .filtering import filter_documents
+        docs = filter_documents(docs, 
+            src=actual_filters.get("source"),
+            file_type=actual_filters.get("file_type"),
+            upload_date=actual_filters.get("upload_date")
+        )
+        if not docs:
+            raise RuntimeError("Không có tài liệu nào khớp với bộ lọc hiện tại.")
+
+    # Tận dụng cache nếu không có filter và thông số k/use_rerank không đổi
+    if not actual_filters:
+        r = st.session_state.get("hybrid_retriever")
+        if r is not None and getattr(r, "use_rerank", None) == bool(use_rerank) and int(getattr(r, "top_k", k)) == k:
+            return r
 
     # rebuild with proper toggle & wider candidate pools
     r = HybridRetriever(
@@ -74,7 +94,9 @@ def _get_hybrid_retriever(use_rerank: bool):
         use_rerank=bool(use_rerank),
         reranker_model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
     )
-    st.session_state.hybrid_retriever = r
+    if not actual_filters:
+        st.session_state.hybrid_retriever = r
+    
     return r
 
 
@@ -170,7 +192,7 @@ def _invoke_llm(question: str, context: str, history_text: str) -> str:
     return Config.LLM.invoke(prompt_template)
 
 
-def _build_message(question: str, mode: str = "RAG") -> dict:
+def _build_message(question: str, mode: str = "RAG", filters: dict = None) -> dict:
     """
     Xây dựng thông điệp phản hồi AI từ câu hỏi và mode truy xuất.
 
@@ -211,9 +233,9 @@ def _build_message(question: str, mode: str = "RAG") -> dict:
         search_mode = (st.session_state.get("search_mode") or "Vector").lower()
         use_rerank = bool(st.session_state.get("use_rerank"))
         if search_mode == "hybrid":
-            active_retriever = _get_hybrid_retriever(use_rerank)
+            active_retriever = _get_hybrid_retriever(use_rerank, filters)
         else:
-            active_retriever = _get_vector_retriever(use_rerank)
+            active_retriever = _get_vector_retriever(use_rerank, filters)
 
         # Retrieval dùng câu hỏi đã rewrite (tăng recall cho cả Vector/BM25),
         # còn generation vẫn dùng câu hỏi gốc để giữ ý định giao tiếp.
@@ -262,7 +284,7 @@ def _build_message(question: str, mode: str = "RAG") -> dict:
     }
 
 
-def handle_answer_question(question, mode=None):
+def handle_answer_question(question, mode=None, filters=None):
     """
     Xử lý một câu hỏi của user trong một mode RAG.
 
@@ -286,7 +308,7 @@ def handle_answer_question(question, mode=None):
     st.session_state.chat_history_ui.append(user_msg)
     save_messages(st.session_state.session_id, user_msg)
     # Xây dựng và ghi lại phản hồi AI
-    answer_message = _build_message(question, mode)
+    answer_message = _build_message(question, mode, filters)
     answer_message["response"] = answer_message["content"]
     st.session_state.chat_history_ui.append(answer_message)
 
@@ -295,7 +317,7 @@ def handle_answer_question(question, mode=None):
     return answer_message
 
 
-def handle_benchmark_question(question: str):
+def handle_benchmark_question(question: str, filters: dict = None):
     """
     Chạy benchmark so sánh Vector vs Hybrid cho 1 câu hỏi.
     Lưu kết quả vào chat history và SQLite để refresh vẫn xem lại được.
@@ -313,6 +335,17 @@ def handle_benchmark_question(question: str):
     save_messages(st.session_state.session_id, user_msg)
 
     docs = st.session_state.get("documents") or []
+    actual_filters = {k: v for k, v in (filters or {}).items() if v}
+    if actual_filters:
+        docs = filter_documents(
+            docs,
+            src=actual_filters.get("source"),
+            file_type=actual_filters.get("file_type"),
+            upload_date=actual_filters.get("upload_date"),
+        )
+        if not docs:
+            st.error("Không có tài liệu nào khớp với bộ lọc hiện tại.")
+            return {}
     k = st.session_state.get("retrieval_k") or 4
     results = benchmark_retriever(
         questions=[question],

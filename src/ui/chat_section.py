@@ -11,10 +11,10 @@ def render_chat_section():
         render_chat_history()
         
         # UI Đặt câu hỏi
-        question, submit_question = render_chat_input()
+        question, submit_question, f_src, f_type, f_date = render_chat_input()
         
         # Xử lý câu trả lời
-        render_answer_question(question, submit_question)
+        render_answer_question(question, submit_question, f_src, f_type, f_date)
     else:
         st.divider()
         st.markdown("""
@@ -143,6 +143,16 @@ def render_chat_input():
             value=st.session_state.run_benchmark,
         )
 
+        docs = st.session_state.get("documents", [])
+        available_sources = sorted(list(set(doc.metadata.get("source") for doc in docs if doc.metadata.get("source"))))
+        available_types = sorted(list(set(doc.metadata.get("file_type") for doc in docs if doc.metadata.get("file_type"))))
+        available_dates = sorted(list(set(doc.metadata.get("upload_date") for doc in docs if doc.metadata.get("upload_date"))))
+
+        with st.expander("🛠️ Lọc tài liệu (Tùy chọn)"):
+            filter_source = st.selectbox("Nguồn tài liệu (Source):", ["Tất cả"] + available_sources, key="filter_source")
+            filter_file_type = st.selectbox("Loại file (File Type):", ["Tất cả"] + available_types, key="filter_file_type")
+            filter_upload_date = st.selectbox("Ngày tải lên (Upload Date):", ["Tất cả"] + available_dates, key="filter_upload_date")
+
         with st.form(key="question_form", border=False):
             question = st.text_area(
                 "Nhập câu hỏi:",
@@ -159,14 +169,20 @@ def render_chat_input():
                     type="primary"
                 )
     
-    return question, submit_question
+    return question, submit_question, filter_source, filter_file_type, filter_upload_date
 
 # UI xử lý câu trả lời
-def render_answer_question(question, submit_question):
+def render_answer_question(question, submit_question, filter_source, filter_file_type, filter_upload_date):
     if submit_question:
         if not question.strip():
             st.error("⚠️ Vui lòng nhập câu hỏi!")
             return
+
+        filters = {
+            "source": filter_source if filter_source != "Tất cả" else None,
+            "file_type": filter_file_type if filter_file_type != "Tất cả" else None,
+            "upload_date": filter_upload_date if filter_upload_date != "Tất cả" else None
+        }
 
         with st.spinner("🔍 Đang xử lý..."):
             try:
@@ -175,10 +191,10 @@ def render_answer_question(question, submit_question):
                 else:
                     # Benchmark overrides single answer
                     if st.session_state.get("run_benchmark"):
-                        handle_benchmark_question(question)
+                        handle_benchmark_question(question, filters=filters)
                     else:
                         # Pass retrieval mode for RAG path (Vector/Hybrid)
-                        handle_answer_question(question, mode=st.session_state.rag_mode["name"])
+                        handle_answer_question(question, mode=st.session_state.rag_mode["name"], filters=filters)
 
                 st.rerun()
 
