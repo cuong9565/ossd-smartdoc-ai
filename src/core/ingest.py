@@ -8,6 +8,19 @@ import time
 from .metadata import assign_chunk_index_metadata, add_document_metadata
 
 def ingest_uploaded_files(stepcurr, numstep, uploaded_files, chunk_size, chunk_overlap):
+  """
+  Ingest uploaded files and split them into chunks.
+  
+  Args:
+      stepcurr (int): Current step number
+      numstep (int): Total number of steps
+      uploaded_files (list): List of uploaded files
+      chunk_size (int): Size of each chunk
+      chunk_overlap (int): Overlap between chunks
+  
+  Returns:
+      list: List of documents
+  """
   step = st.empty()
   step_string = f"📖 Bước {stepcurr}/{numstep}: Trích xuất văn bản và chunking tài liệu..."
   step.markdown(step_string)
@@ -43,7 +56,7 @@ def ingest_uploaded_files(stepcurr, numstep, uploaded_files, chunk_size, chunk_o
   elapsed = round(time.time() - start_time, 2)
   step.success(f"📖 Trích xuất và chunking tài liệu trong {elapsed}s")
   st.session_state.rag_mode["step"].append(f"📖 Trích xuất và chunking tài liệu trong **{elapsed}s**")
-
+  st.session_state.documents = all_docs
   return all_docs
 
 def load_file(temp_path, suffix):

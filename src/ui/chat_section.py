@@ -216,7 +216,6 @@ def render_sources_ui(sources: list, keywords: list):
                 <div class="source-header">
                     <div style="display: flex; flex-direction: column;">
                         <span class="source-title">📌 Nguồn {i}</span>
-                        <span style="font-size: 0.8rem; color: #666; font-style: italic;">📁 {file_name}</span>
                     </div>
                     <div class="source-badges">
                         <span class="file-badge">📁 File&nbsp;{file_name}</span>

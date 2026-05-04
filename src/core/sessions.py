@@ -60,6 +60,10 @@ def init_sessions_state():
     if "is_processing" not in st.session_state:
         st.session_state.is_processing = False
     
+    # Enable chunk evaluation mode
+    if "enable_chunk_evaluation" not in st.session_state:
+        st.session_state.enable_chunk_evaluation = False
+    
     sid = st.query_params.get("sid")
     if isinstance(sid, list):
         sid = sid[0] if sid else None

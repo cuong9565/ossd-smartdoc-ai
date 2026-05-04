@@ -101,6 +101,15 @@ def render_sidebar():
                 options = options_mode,
                 index = options_mode.index(st.session_state.rag_mode["name"]) if st.session_state.rag_mode["name"] in options_mode else 0
             )
+            
+            # ========== CHUNKING EVALUATION MODE ==========
+            st.subheader("📊 Đánh giá Chunking", divider=False)
+            enable_chunk_evaluation = st.checkbox(
+                "Bật chế độ đánh giá chunking",
+                value=False,
+                help="So sánh hiệu suất của các cấu hình chunking khác nhau"
+            )
+            st.session_state.enable_chunk_evaluation = enable_chunk_evaluation
         
         # ========== FOOTER ==========
         st.markdown("""
