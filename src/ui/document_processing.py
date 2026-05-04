@@ -3,122 +3,56 @@ import tempfile
 import os
 import time
 from src.core.metadata import extract_document_profile
-from ..core import chunk_file, embedding
-from ..advanced import load_file, extract_triples, build_graph, save_graph
+from ..core import embedding
+from ..advanced import extract_triples, build_graph, save_graph
 from src.presistance.history_manager import save_document_state_full, save_retriever_state
 from src.core.ingest import ingest_uploaded_files
 from src.advanced.hybrid_search import HybridRetriever
 from src.core.config import Config
 
-
-def _normalize_uploaded_files(uploaded_files):
-    if not uploaded_files:
-        return []
-    # streamlit.file_uploader(accept_multiple_files=True) trả về List[UploadedFile]
-    # nhưng đôi khi code cũ truyền vào 1 UploadedFile đơn lẻ
-    return uploaded_files if isinstance(uploaded_files, list) else [uploaded_files]
-
-
-def document_processing(uploaded_file, chunk_size, chunk_overlap, retrieval_k, rag_mode):
-    uploaded_files = _normalize_uploaded_files(uploaded_file)
+def document_processing(uploaded_files, chunk_size, chunk_overlap, retrieval_k, rag_mode):
     if uploaded_files and st.session_state.rag_mode["name"] is None:
+        # Get total size of all files
         total_size_mb = sum([(f.size or 0) for f in uploaded_files]) / (1024 * 1024)
         
-        # If size file > 100MB10
+        # If size all files > 100MB
         if total_size_mb > 100:
             st.error(f"❌ Tổng dung lượng file quá lớn ({total_size_mb:.2f}MB > 100MB)")
             return
 
-        st.session_state.rag_mode["name"] = rag_mode
-        st.session_state.rag_mode["step"] = []
-        st.session_state.uploaded_file_name = [f.name for f in uploaded_files]
-        st.session_state.graph_triples = []
-        st.session_state.documents = []
-        st.session_state.document_meta = None
-        st.session_state.is_processing = True
+        # Khởi tạo các session state cần thiết
+        st.session_state.rag_mode["name"] = rag_mode # Lưu chế độ RAG hiện tại (RAG || GRAPH RAG || RAG && GRAPH RAG)
+        st.session_state.rag_mode["step"] = [] # Lưu danh sách các bước xử lý
+        st.session_state.uploaded_file_name = [f.name for f in uploaded_files] # Lưu tên các file đã upload
+        st.session_state.graph_triples = [] # Lưu danh sách triple (subject - predicate - object)
+        st.session_state.documents = [] # Lưu danh sách document sau khi parse/chunk
+        st.session_state.document_meta = None # Lưu metadata của document (ví dụ: source, page, chunk id...)
+        st.session_state.is_processing = True # Đánh dấu trạng thái đang xử lý
         
+        # Processing Pipeline
         try:
             with st.status("🔄 Đang xử lý tài liệu...", expanded=True):
-                # Multi-file: ingest trực tiếp thành chunks + metadata
-                # (đảm bảo mỗi chunk có source/file_type/upload_date/doc_id/chunk_index)
-                documents = ingest_uploaded_files(uploaded_files, chunk_size, chunk_overlap)
-
                 if rag_mode == "RAG":
-                    _ = _do_step_embedding(stepcurr=1, numstep=1, documents=documents, retrieval_k=retrieval_k)
-                    st.session_state.documents = documents
+                    documents = ingest_uploaded_files(1, 2, uploaded_files, chunk_size, chunk_overlap)
+                    _ =         _do_step_embedding(2, 2, documents, retrieval_k)
+
                 elif rag_mode == "Graph RAG":
-                    _ = _do_step_embedding(stepcurr=1, numstep=3, documents=documents, retrieval_k=retrieval_k)
-                    triples = _do_step_extract_triples(stepcurr=2, numstep=3, documents=documents)
-                    _ = _do_step_build_graph(stepcurr=3, numstep=3, triples=triples)
-                    st.session_state.documents = documents
+                    documents = ingest_uploaded_files(1, 4, uploaded_files, chunk_size, chunk_overlap)
+                    _ =         _do_step_embedding(2, 4, documents, retrieval_k)
+                    triples =   _do_step_extract_triples(3, 4, documents)
+                    _ =         _do_step_build_graph(4, 4, triples)
+
                 else:
-                    _ = _do_step_embedding(stepcurr=1, numstep=3, documents=documents, retrieval_k=retrieval_k)
-                    triples = _do_step_extract_triples(stepcurr=2, numstep=3, documents=documents)
-                    _ = _do_step_build_graph(stepcurr=3, numstep=3, triples=triples)
-                    st.session_state.documents = documents
+                    documents = ingest_uploaded_files(1, 4, uploaded_files, chunk_size, chunk_overlap)
+                    _ =         _do_step_embedding(2, 4, documents, retrieval_k)
+                    triples =   _do_step_extract_triples(3, 4, documents)
+                    _ =         _do_step_build_graph(4, 4, triples)
 
-                # Build Hybrid retriever once (for chat "Hybrid" mode)
-                # Use wider candidate pools than top_k for better recall.
-                k = int(retrieval_k) if retrieval_k else 4
-                try:
-                    st.session_state.hybrid_retriever = HybridRetriever(
-                        documents=documents,
-                        embedder=Config.get_embedder(),
-                        dense_k=max(30, k * 3),
-                        sparse_k=max(30, k * 3),
-                        rerank_k=max(30, k * 6),
-                        top_k=k,
-                        alpha=0.6,
-                        use_rerank=False,
-                    )
-                except Exception:
-                    # Không để lỗi build hybrid làm hỏng flow ingest
-                    st.session_state.hybrid_retriever = None
-
-                save_retriever_state(st.session_state.session_id, rag_mode, retrieval_k, chunk_size, chunk_overlap)
-                save_document_state_full(
-                    st.session_state.session_id,
-                    st.session_state.uploaded_file_name,
-                    rag_mode,
-                    chunk_size,
-                    chunk_overlap,
-                    retrieval_k,
-                    documents,
-                    st.session_state.rag_mode.get("step", []),
-                    st.session_state.get("graph_triples", []),
-                )
-                st.session_state.document_meta = {
-                    "session_id": st.session_state.session_id,
-                    "file_name": st.session_state.uploaded_file_name,
-                    "mode": rag_mode,
-                    "chunk_size": chunk_size,
-                    "chunk_overlap": chunk_overlap,
-                    "retrieval_k": retrieval_k,
-                    "documents": documents,
-                }
-                vector_dir = os.path.join("vectorstores", st.session_state.session_id)
-                os.makedirs(vector_dir, exist_ok=True)
-                st.session_state.vector_db.save_local(vector_dir)
-
+                _build_hybird_retriever(retrieval_k)
+                _do_step_save_database(rag_mode, retrieval_k, chunk_size, chunk_overlap, documents)
         finally:
             st.session_state.is_processing = False
         st.rerun()
-
-def _do_step_load_file(stepcurr, numstep, temp_path, suffix):
-    step = st.empty()
-    step.write(f"📖 Bước {stepcurr}/{numstep}: Trích xuất văn bản...")
-    elapsed, docs = load_file(temp_path, suffix)
-    step.success(f"📖 Trích xuất {len(docs)} trang trong {elapsed}s")
-    st.session_state.rag_mode["step"].append(f"📖 Trích xuất {len(docs)} trang trong **{elapsed}s**")
-    return docs
-
-def _do_step_chunk_file(stepcurr, numstep, chunk_size, chunk_overlap, docs):
-    step = st.empty()
-    # step.write(f"✂️ Bước {stepcurr}/{numstep}: Chia nhỏ văn bản thành chunks...")
-    elapsed, documents = chunk_file(chunk_size, chunk_overlap, docs)
-    # step.success(f"✂️ Chunking {len(documents)} chunks trong {elapsed}s")
-    st.session_state.rag_mode["step"].append(f"✂️ Chunking {len(documents)} chunks trong **{elapsed}s**")
-    return documents
 
 def _do_step_embedding(stepcurr, numstep, documents, retrieval_k):
     step = st.empty()
@@ -148,18 +82,64 @@ def _do_step_build_graph(stepcurr, numstep, triples):
     st.session_state.rag_mode["step"].append(f"🕸️ Xây dựng  trong **{elapsed}s**")
     return None
 
+def _build_hybird_retriever(retrieval_k):
+    """
+    Build hybrid retriever once (for chat "Hybrid" mode)
+    Use wider candidate pools than top_k for better recall.
+    """
+    step_build_hybird = st.empty()
+    step_build_hybird.write(f"Xây dựng Hybrid retriever...")
+    k = int(retrieval_k) if retrieval_k else 4
+    try:
+        st.session_state.hybrid_retriever = HybridRetriever(
+            documents=st.session_state.documents,
+            embedder=Config.get_embedder(),
+            dense_k=max(30, k * 3),
+            sparse_k=max(30, k * 3),
+            rerank_k=max(30, k * 6),
+            top_k=k,
+            alpha=0.6,
+            use_rerank=False,
+        )
+    except Exception:
+        # Không để lỗi build hybrid làm hỏng flow ingest
+        st.session_state.hybrid_retriever = None
+    step_build_hybird.success(f"**Xây dựng Hybrid retriever thành công**")
 
-def _do_step_extract_profile(stepcurr, numstep, documents):
-    start_time = time.time()
-
-    # Lấy profile và lưu vào session_state
-    profile = extract_document_profile(documents)
-    st.session_state.document_profile = profile
-
-    elapsed = round(time.time() - start_time, 2)
-
-    # Hiển thị log trên UI giống các bước khác
-    st.write(f"📄 Bước {stepcurr}/{numstep}: Nhận diện tài liệu... ({elapsed}s)")
-    st.info(f"Lĩnh vực nhận diện: {profile}")  # In ra để người dùng thấy
-
-    return profile
+def _do_step_save_database(rag_mode, retrieval_k, chunk_size, chunk_overlap, documents):
+    """
+    Lưu trạng thái retriever và document vào database
+    """
+    step_save_database = st.empty()
+    step_save_database.write(f"Lưu vào database...")
+    save_retriever_state(
+        st.session_state.session_id, 
+        rag_mode, 
+        retrieval_k, 
+        chunk_size, 
+        chunk_overlap
+    )
+    save_document_state_full(
+        st.session_state.session_id,
+        st.session_state.uploaded_file_name,
+        rag_mode,
+        chunk_size,
+        chunk_overlap,
+        retrieval_k,
+        documents,
+        st.session_state.rag_mode.get("step", []),
+        st.session_state.get("graph_triples", []),
+    )
+    st.session_state.document_meta = {
+        "session_id": st.session_state.session_id,
+        "file_name": st.session_state.uploaded_file_name,
+        "mode": rag_mode,
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+        "retrieval_k": retrieval_k,
+        "documents": documents,
+    }
+    vector_dir = os.path.join("vectorstores", st.session_state.session_id)
+    os.makedirs(vector_dir, exist_ok=True)
+    st.session_state.vector_db.save_local(vector_dir)
+    step_save_database.success(f"**Lưu vào database thành công**")

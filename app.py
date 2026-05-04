@@ -14,7 +14,7 @@ from src.ui import (
     document_processing,
     render_chat_section,
 )
-from src.advanced import render_chunk_config
+from src.advanced import render_chunk_config, render_chunk_direct_evaluation_section
 
 def main():
     # Init DB + Session State
@@ -32,6 +32,15 @@ def main():
 
     # Upload (multi-file)
     uploaded_files = render_upload_ui()
+
+    # Store uploaded files in session state for chunk evaluation
+    if uploaded_files:
+        st.session_state.uploaded_files = uploaded_files
+
+    # Chunk evaluation section (if enabled)
+    if st.session_state.get('enable_chunk_evaluation', False):
+        render_chunk_direct_evaluation_section()
+        return
 
     # Document status
     render_document_status_ui()

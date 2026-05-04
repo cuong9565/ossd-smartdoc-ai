@@ -266,6 +266,7 @@ def _build_message(question: str, mode: str = "RAG", filters: dict = None) -> di
                 "page": doc.metadata.get('page', 0),
                 "chunk_index": doc.metadata.get('chunk_index', '—'),
                 "content": doc.page_content,
+                "source": doc.metadata.get('source', 'Unknown'),
             }
             for doc in relevant_docs
         ]

@@ -11,11 +11,8 @@ def render_document_status_ui():
 
         with st.expander(label="📂 Danh sách tài liệu", expanded=False):
             file_name = document_meta.get("file_name") or st.session_state.uploaded_file_name or "None"
-            # uploaded_file_name có thể là list khi multi-file
-            if isinstance(file_name, list):
-                st.success(", ".join(file_name))
-            else:
-                st.success(file_name)
+            for file in file_name:
+                st.success(file)
             st.caption(f"📄 Số chunks: {len(documents)}")
 
         with st.expander(label="📄 Thông tin xử lý tài liệu", expanded=False):
